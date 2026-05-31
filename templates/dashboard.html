@@ -1,0 +1,1292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Hospital Management System</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div id="toast" class="toast"></div>
+
+    <div class="dashboard">
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <h2>🏥 HMS</h2>
+                <span class="role-badge" id="userRoleBadge"></span>
+                <p style="font-size:13px;color:#94a3b8;margin-top:8px" id="userNameDisplay"></p>
+            </div>
+
+            <ul class="sidebar-nav" id="navLinks">
+                <li><a class="active" data-page="overview" onclick="showPage('overview')">📊 Overview</a></li>
+                <li id="navPatients"><a data-page="patients" onclick="showPage('patients')">👥 Patients</a></li>
+                <li id="navDoctors"><a data-page="doctors" onclick="showPage('doctors')">👨‍⚕️ Doctors</a></li>
+                <li id="navAppointments"><a data-page="appointments" onclick="showPage('appointments')">📅 Appointments</a></li>
+                <li id="navPharmacy"><a data-page="pharmacy" onclick="showPage('pharmacy')">💊 Pharmacy</a></li>
+                <li id="navPrescriptions"><a data-page="prescriptions" onclick="showPage('prescriptions')">📋 Prescriptions</a></li>
+                <li id="navBilling"><a data-page="billing" onclick="showPage('billing')">💰 Billing</a></li>
+                <li id="navRooms"><a data-page="rooms" onclick="showPage('rooms')">🛏️ Rooms</a></li>
+                <li id="navUsers"><a data-page="users" onclick="showPage('users')">👤 Users</a></li>
+            </ul>
+
+            <div class="sidebar-footer">
+                <a onclick="logout()">🚪 Logout</a>
+            </div>
+        </aside>
+
+        <main class="main-content" id="mainContent">
+            <div class="page-header">
+                <h1 id="pageTitle">Overview</h1>
+                <div id="headerActions"></div>
+            </div>
+            <div id="pageContent"></div>
+        </main>
+    </div>
+
+    <script src="/static/js/main.js"></script>
+    <script>
+        const user = getUser();
+        if (!user || !getToken()) {
+            window.location.href = '/';
+        }
+
+        const role = user.role;
+        document.getElementById('userRoleBadge').textContent = role.charAt(0).toUpperCase() + role.slice(1);
+        document.getElementById('userNameDisplay').textContent = user.username;
+
+        // Role-based navigation visibility
+        function setupNav() {
+            document.querySelectorAll('.sidebar-nav li').forEach(li => li.style.display = '');
+            if (role === 'doctor') {
+                document.getElementById('navPharmacy').style.display = 'none';
+                document.getElementById('navBilling').style.display = 'none';
+                document.getElementById('navRooms').style.display = 'none';
+                document.getElementById('navUsers').style.display = 'none';
+                document.getElementById('navDoctors').style.display = 'none';
+            } else if (role === 'pharmacist') {
+                document.getElementById('navPatients').style.display = 'none';
+                document.getElementById('navDoctors').style.display = 'none';
+                document.getElementById('navAppointments').style.display = 'none';
+                document.getElementById('navBilling').style.display = 'none';
+                document.getElementById('navRooms').style.display = 'none';
+                document.getElementById('navUsers').style.display = 'none';
+                document.getElementById('navPrescriptions').style.display = '';
+            } else if (role === 'receptionist') {
+                document.getElementById('navPharmacy').style.display = 'none';
+                document.getElementById('navDoctors').style.display = 'none';
+                document.getElementById('navUsers').style.display = 'none';
+                document.getElementById('navPrescriptions').style.display = 'none';
+            }
+        }
+        setupNav();
+
+        const pageTitles = {
+            overview: '📊 Dashboard Overview',
+            patients: '👥 Patient Management',
+            doctors: '👨‍⚕️ Doctor Management',
+            appointments: '📅 Appointments',
+            pharmacy: '💊 Pharmacy Inventory',
+            prescriptions: '📋 Prescriptions',
+            billing: '💰 Billing',
+            rooms: '🛏️ Room Management',
+            users: '👤 User Management'
+        };
+
+        function showPage(page) {
+            document.querySelectorAll('.sidebar-nav a').forEach(a => a.classList.remove('active'));
+            document.querySelector(`.sidebar-nav a[data-page="${page}"]`).classList.add('active');
+            document.getElementById('pageTitle').textContent = pageTitles[page] || page;
+            document.getElementById('headerActions').innerHTML = '';
+
+            switch(page) {
+                case 'overview': renderOverview(); break;
+                case 'patients': renderPatients(); break;
+                case 'doctors': renderDoctors(); break;
+                case 'appointments': renderAppointments(); break;
+                case 'pharmacy': renderPharmacy(); break;
+                case 'prescriptions': renderPrescriptions(); break;
+                case 'billing': renderBilling(); break;
+                case 'rooms': renderRooms(); break;
+                case 'users': renderUsers(); break;
+            }
+        }
+
+        // =========== OVERVIEW ===========
+        async function renderOverview() {
+            const el = document.getElementById('pageContent');
+            if (role === 'doctor') {
+                await renderDoctorOverview(el);
+                return;
+            }
+            try {
+                const data = await apiRequest('/dashboard/stats/');
+                el.innerHTML = `
+                    <div class="stats-grid">
+                        <div class="stat-card"><div class="stat-value">${data.total_patients}</div><div class="stat-label">Total Patients</div></div>
+                        <div class="stat-card green"><div class="stat-value">${data.total_doctors}</div><div class="stat-label">Total Doctors</div></div>
+                        <div class="stat-card yellow"><div class="stat-value">${data.total_appointments_today}</div><div class="stat-label">Appointments Today</div></div>
+                        <div class="stat-card"><div class="stat-value">${data.total_admitted}</div><div class="stat-label">Admitted Patients</div></div>
+                        <div class="stat-card green"><div class="stat-value">${data.available_rooms}</div><div class="stat-label">Available Rooms</div></div>
+                        <div class="stat-card red"><div class="stat-value">${data.low_stock_medicines}</div><div class="stat-label">Low Stock Medicines</div></div>
+                        <div class="stat-card red"><div class="stat-value">$${data.pending_bills}</div><div class="stat-label">Pending Bills</div></div>
+                    </div>
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:24px">
+                        <div style="background:var(--card);border-radius:12px;padding:16px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.1);cursor:pointer" onclick="showPage('doctors')">
+                            <div style="font-size:32px;margin-bottom:8px">👨‍⚕️</div>
+                            <div style="font-weight:600;font-size:14px">Manage Doctors</div>
+                            <div style="font-size:12px;color:var(--text-light)">View / Add / Delete</div>
+                        </div>
+                        <div style="background:var(--card);border-radius:12px;padding:16px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.1);cursor:pointer" onclick="showPage('patients')">
+                            <div style="font-size:32px;margin-bottom:8px">👥</div>
+                            <div style="font-weight:600;font-size:14px">Manage Patients</div>
+                            <div style="font-size:12px;color:var(--text-light)">Register / Admit</div>
+                        </div>
+                        <div style="background:var(--card);border-radius:12px;padding:16px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.1);cursor:pointer" onclick="showPage('appointments')">
+                            <div style="font-size:32px;margin-bottom:8px">📅</div>
+                            <div style="font-weight:600;font-size:14px">Appointments</div>
+                            <div style="font-size:12px;color:var(--text-light)">Schedule / Manage</div>
+                        </div>
+                        <div style="background:var(--card);border-radius:12px;padding:16px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.1);cursor:pointer" onclick="showPage('pharmacy')">
+                            <div style="font-size:32px;margin-bottom:8px">💊</div>
+                            <div style="font-weight:600;font-size:14px">Pharmacy</div>
+                            <div style="font-size:12px;color:var(--text-light)">Stock / Medicines</div>
+                        </div>
+                        <div style="background:var(--card);border-radius:12px;padding:16px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.1);cursor:pointer" onclick="showPage('billing')">
+                            <div style="font-size:32px;margin-bottom:8px">💰</div>
+                            <div style="font-weight:600;font-size:14px">Billing</div>
+                            <div style="font-size:12px;color:var(--text-light)">Payments / Invoices</div>
+                        </div>
+                        <div style="background:var(--card);border-radius:12px;padding:16px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.1);cursor:pointer" onclick="showPage('rooms')">
+                            <div style="font-size:32px;margin-bottom:8px">🛏️</div>
+                            <div style="font-weight:600;font-size:14px">Rooms</div>
+                            <div style="font-size:12px;color:var(--text-light)">Allocations</div>
+                        </div>
+                    </div>
+                    <div class="table-container"><h3>📅 Recent Appointments</h3>
+                    <table><thead><tr><th>Patient</th><th>Doctor</th><th>Date</th><th>Time</th><th>Status</th></tr></thead><tbody id="recentAppsBody"></tbody></table></div>
+                `;
+                const apps = await apiRequest('/appointments/?status=scheduled');
+                const tbody = document.getElementById('recentAppsBody');
+                tbody.innerHTML = apps.slice(0, 10).map(a => `
+                    <tr>
+                        <td>${a.patient_name}</td>
+                        <td>${a.doctor_name}</td>
+                        <td>${formatDate(a.appointment_date)}</td>
+                        <td>${a.appointment_time}</td>
+                        <td><span class="status-badge status-${a.status}">${a.status}</span></td>
+                    </tr>
+                `).join('');
+            } catch (e) {
+                el.innerHTML = `<p style="color:var(--danger)">Error loading dashboard: ${e.message}</p>`;
+            }
+        }
+
+        async function renderDoctorOverview(el) {
+            try {
+                const data = await apiRequest('/dashboard/doctor/');
+                el.innerHTML = `
+                    <div class="stats-grid">
+                        <div class="stat-card"><div class="stat-value">${data.today_appointments}</div><div class="stat-label">Today's Appointments</div></div>
+                        <div class="stat-card green"><div class="stat-value">${data.total_patients}</div><div class="stat-label">Total Patients</div></div>
+                        <div class="stat-card yellow"><div class="stat-value">${data.upcoming_appointments}</div><div class="stat-label">Upcoming Appointments</div></div>
+                    </div>
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:24px">
+                        <div style="background:var(--card);border-radius:12px;padding:16px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.1);cursor:pointer" onclick="showPage('appointments')">
+                            <div style="font-size:32px;margin-bottom:8px">📅</div>
+                            <div style="font-weight:600;font-size:14px">My Appointments</div>
+                            <div style="font-size:12px;color:var(--text-light)">View / Manage</div>
+                        </div>
+                        <div style="background:var(--card);border-radius:12px;padding:16px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.1);cursor:pointer" onclick="showPage('patients')">
+                            <div style="font-size:32px;margin-bottom:8px">👥</div>
+                            <div style="font-weight:600;font-size:14px">My Patients</div>
+                            <div style="font-size:12px;color:var(--text-light)">View History</div>
+                        </div>
+                        <div style="background:var(--card);border-radius:12px;padding:16px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.1);cursor:pointer" onclick="showPage('prescriptions')">
+                            <div style="font-size:32px;margin-bottom:8px">📋</div>
+                            <div style="font-weight:600;font-size:14px">Prescriptions</div>
+                            <div style="font-size:12px;color:var(--text-light)">Write Prescriptions</div>
+                        </div>
+                    </div>
+                    <div class="table-container"><h3>📅 Recent Appointments</h3>
+                    <table><thead><tr><th>Patient</th><th>Date</th><th>Time</th><th>Status</th><th>Action</th></tr></thead><tbody id="recentAppsBody"></tbody></table></div>
+                `;
+                const tbody = document.getElementById('recentAppsBody');
+                tbody.innerHTML = (data.recent_appointments || []).map(a => `
+                    <tr>
+                        <td>${a.patient_name}</td>
+                        <td>${formatDate(a.appointment_date)}</td>
+                        <td>${a.appointment_time}</td>
+                        <td><span class="status-badge status-${a.status}">${a.status}</span></td>
+                        <td>
+                            ${a.status === 'scheduled' ? `<button class="btn btn-success btn-sm" onclick="completeAppointment(${a.id})">Complete</button>` : ''}
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (e) {
+                el.innerHTML = `<p style="color:var(--danger)">${e.message}</p>`;
+            }
+        }
+
+        window.completeAppointment = async function(id) {
+            try {
+                await apiRequest(`/appointments/${id}/mark_completed/`, { method: 'POST' });
+                showToast('Appointment marked completed');
+                renderOverview();
+            } catch (e) { showToast(e.message, 'error'); }
+        };
+
+        // =========== PATIENTS ===========
+        async function renderPatients() {
+            const el = document.getElementById('pageContent');
+            try {
+                const patients = await apiRequest('/patients/');
+                el.innerHTML = `
+                    <div class="flex-between mb-16">
+                        <div></div>
+                        <button class="btn btn-primary" onclick="showAddPatientModal()">+ Add Patient</button>
+                    </div>
+                    <div class="table-container">
+                        <table>
+                            <thead><tr><th>Name</th><th>Gender</th><th>Phone</th><th>Blood Group</th><th>Age</th><th>Admitted</th><th>Actions</th></tr></thead>
+                            <tbody>${patients.map(p => `
+                                <tr>
+                                    <td>${p.first_name} ${p.last_name}</td>
+                                    <td>${p.gender}</td>
+                                    <td>${p.phone}</td>
+                                    <td>${p.blood_group || '-'}</td>
+                                    <td>${p.age ?? '-'}</td>
+                                    <td>${p.is_admitted ? '<span class="status-badge status-occupied">Yes</span>' : '<span class="status-badge status-available">No</span>'}</td>
+                                    <td>
+                                        <button class="btn btn-sm btn-secondary" onclick="viewPatient(${p.id})">View</button>
+                                        ${!p.is_admitted ? `<button class="btn btn-sm btn-success" onclick="showAdmitModal(${p.id}, '${p.first_name} ${p.last_name}')">Admit</button>` : `<button class="btn btn-sm btn-warning" onclick="dischargePatient(${p.id})">Discharge</button>`}
+                                    </td>
+                                </tr>
+                            `).join('')}</tbody>
+                        </table>
+                    </div>
+                    <div id="patientDetail"></div>
+                `;
+            } catch (e) { el.innerHTML = `<p style="color:var(--danger)">${e.message}</p>`; }
+        }
+
+        window.showAddPatientModal = function() {
+            const modal = document.createElement('div');
+            modal.className = 'modal-overlay active';
+            modal.id = 'patientModal';
+            modal.innerHTML = `
+                <div class="modal">
+                    <h2>Register New Patient</h2>
+                    <form id="addPatientForm">
+                        <div class="form-row">
+                            <div class="form-group"><label>First Name</label><input type="text" id="pFirstName" required></div>
+                            <div class="form-group"><label>Last Name</label><input type="text" id="pLastName" required></div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group"><label>Date of Birth</label><input type="date" id="pDob"></div>
+                            <div class="form-group"><label>Gender</label><select id="pGender"><option value="M">Male</option><option value="F">Female</option><option value="O">Other</option></select></div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group"><label>Phone</label><input type="text" id="pPhone" required></div>
+                            <div class="form-group"><label>Email</label><input type="email" id="pEmail"></div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group"><label>Blood Group</label><select id="pBlood"><option value="">Select</option><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>AB+</option><option>AB-</option><option>O+</option><option>O-</option></select></div>
+                            <div class="form-group"><label>Emergency Contact</label><input type="text" id="pEmergency"></div>
+                        </div>
+                        <div class="form-group"><label>Address</label><textarea id="pAddress" rows="2"></textarea></div>
+                        <div class="form-group"><label>Medical History</label><textarea id="pHistory" rows="2" placeholder="Pre-existing conditions, allergies"></textarea></div>
+                        <button type="submit" class="btn btn-primary">Register Patient</button>
+                        <button type="button" class="btn btn-secondary" style="margin-left:8px" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
+                    </form>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            document.getElementById('addPatientForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const data = {
+                    first_name: document.getElementById('pFirstName').value,
+                    last_name: document.getElementById('pLastName').value,
+                    date_of_birth: document.getElementById('pDob').value || null,
+                    gender: document.getElementById('pGender').value,
+                    phone: document.getElementById('pPhone').value,
+                    email: document.getElementById('pEmail').value,
+                    blood_group: document.getElementById('pBlood').value,
+                    emergency_contact: document.getElementById('pEmergency').value,
+                    address: document.getElementById('pAddress').value,
+                    medical_history: document.getElementById('pHistory').value,
+                };
+                try {
+                    await apiRequest('/patients/', { method: 'POST', body: JSON.stringify(data) });
+                    showToast('Patient registered successfully');
+                    modal.remove();
+                    renderPatients();
+                } catch (e) { showToast(e.message, 'error'); }
+            });
+        };
+
+        window.viewPatient = async function(id) {
+            try {
+                const patient = await apiRequest(`/patients/${id}/`);
+                const apps = await apiRequest(`/patients/${id}/appointments/`);
+                const bills = await apiRequest(`/patients/${id}/bills/`);
+                const modal = document.createElement('div');
+                modal.className = 'modal-overlay active';
+                modal.innerHTML = `
+                    <div class="modal" style="width:700px">
+                        <h2>${patient.first_name} ${patient.last_name}</h2>
+                        <div class="stats-grid" style="grid-template-columns:1fr 1fr 1fr">
+                            <div class="stat-card"><div class="stat-value">${patient.age ?? '-'}</div><div class="stat-label">Age</div></div>
+                            <div class="stat-card"><div class="stat-value">${patient.blood_group || '-'}</div><div class="stat-label">Blood Group</div></div>
+                            <div class="stat-card ${patient.is_admitted ? 'yellow' : 'green'}"><div class="stat-value">${patient.is_admitted ? 'Admitted' : 'Outpatient'}</div><div class="stat-label">Status</div></div>
+                        </div>
+                        <p><strong>Phone:</strong> ${patient.phone} | <strong>Email:</strong> ${patient.email || '-'}</p>
+                        <p><strong>Address:</strong> ${patient.address || '-'}</p>
+                        <p><strong>Medical History:</strong> ${patient.medical_history || 'None'}</p>
+                        <hr style="margin:16px 0">
+                        <h3>Appointments</h3>
+                        <table><thead><tr><th>Doctor</th><th>Date</th><th>Time</th><th>Status</th></tr></thead>
+                        <tbody>${(apps || []).map(a => `<tr><td>${a.doctor_name}</td><td>${formatDate(a.appointment_date)}</td><td>${a.appointment_time}</td><td><span class="status-badge status-${a.status}">${a.status}</span></td></tr>`).join('') || '<tr><td colspan="4">No appointments</td></tr>'}</tbody></table>
+                        <hr style="margin:16px 0">
+                        <h3>Bills</h3>
+                        <table><thead><tr><th>ID</th><th>Total</th><th>Paid</th><th>Due</th><th>Status</th></tr></thead>
+                        <tbody>${(bills || []).map(b => `<tr><td>#${b.id}</td><td>$${b.total_amount}</td><td>$${b.paid_amount}</td><td>$${b.due_amount}</td><td><span class="status-badge status-${b.status}">${b.status}</span></td></tr>`).join('') || '<tr><td colspan="5">No bills</td></tr>'}</tbody></table>
+                        <button class="btn btn-secondary mt-16" onclick="this.closest('.modal-overlay').remove()">Close</button>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+            } catch (e) { showToast(e.message, 'error'); }
+        };
+
+        window.showAdmitModal = async function(patientId, patientName) {
+            try {
+                const rooms = await apiRequest('/rooms/available/');
+                const modal = document.createElement('div');
+                modal.className = 'modal-overlay active';
+                modal.innerHTML = `
+                    <div class="modal">
+                        <h2>Admit Patient: ${patientName}</h2>
+                        <form id="admitForm">
+                            <div class="form-group">
+                                <label>Select Room</label>
+                                <select id="roomSelect" required>
+                                    <option value="">-- Select --</option>
+                                    ${rooms.map(r => `<option value="${r.id}">${r.room_number} - ${r.room_type} ($${r.price_per_day}/day)</option>`).join('')}
+                                </select>
+                            </div>
+                            <button type="submit" class="btn btn-success">Admit Patient</button>
+                            <button type="button" class="btn btn-secondary" style="margin-left:8px" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
+                        </form>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+                document.getElementById('admitForm').addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    try {
+                        await apiRequest(`/patients/${patientId}/admit/`, {
+                            method: 'POST',
+                            body: JSON.stringify({ room_id: parseInt(document.getElementById('roomSelect').value) })
+                        });
+                        showToast('Patient admitted successfully');
+                        modal.remove();
+                        renderPatients();
+                    } catch (e) { showToast(e.message, 'error'); }
+                });
+            } catch (e) { showToast(e.message, 'error'); }
+        };
+
+        window.dischargePatient = async function(id) {
+            if (!confirm('Discharge this patient?')) return;
+            try {
+                await apiRequest(`/patients/${id}/discharge/`, { method: 'POST' });
+                showToast('Patient discharged');
+                renderPatients();
+            } catch (e) { showToast(e.message, 'error'); }
+        };
+
+        const SPECIALIZATIONS = [
+            'General Medicine', 'Cardiology', 'Dermatology', 'Orthopedics',
+            'Pediatrics', 'Neurology', 'Psychiatry', 'Radiology',
+            'Ophthalmology', 'ENT', 'Gynecology', 'Urology',
+            'Gastroenterology', 'Pulmonology', 'Endocrinology', 'Nephrology',
+            'Hematology', 'Oncology', 'Rheumatology', 'Anesthesiology'
+        ];
+
+        // =========== DOCTORS ===========
+        async function renderDoctors() {
+            const el = document.getElementById('pageContent');
+            try {
+                const doctors = await apiRequest('/doctors/');
+                const specs = [...new Set(doctors.map(d => d.specialization))];
+                el.innerHTML = `
+                    <div class="flex-between mb-16">
+                        <div class="flex gap-8">
+                            <select id="specFilter" onchange="filterDoctors()" style="padding:8px 12px;border:2px solid var(--border);border-radius:8px;font-size:14px">
+                                <option value="">All Specializations</option>
+                                ${specs.map(s => `<option value="${s}">${s}</option>`).join('')}
+                            </select>
+                        </div>
+                        <button class="btn btn-primary" onclick="showAddDoctorModal()">+ Add Doctor</button>
+                    </div>
+                    <div class="table-container">
+                        <table>
+                            <thead><tr><th>Name</th><th>Specialization</th><th>Qualification</th><th>Experience</th><th>Fee</th><th>Status</th><th>Actions</th></tr></thead>
+                            <tbody id="doctorsBody"></tbody>
+                        </table>
+                    </div>
+                `;
+                window._allDoctors = doctors;
+                filterDoctors();
+            } catch (e) { el.innerHTML = `<p style="color:var(--danger)">${e.message}</p>`; }
+        }
+
+        window.filterDoctors = function() {
+            const spec = document.getElementById('specFilter')?.value || '';
+            const doctors = window._allDoctors || [];
+            const filtered = spec ? doctors.filter(d => d.specialization === spec) : doctors;
+            const tbody = document.getElementById('doctorsBody');
+            tbody.innerHTML = filtered.map(d => `
+                <tr>
+                    <td>${d.full_name}</td>
+                    <td><span class="status-badge" style="background:#dbeafe;color:#1e40af">${d.specialization}</span></td>
+                    <td>${d.qualification || '-'}</td>
+                    <td>${d.experience_years || 0} yrs</td>
+                    <td>$${d.consultation_fee}</td>
+                    <td>${d.is_active ? '<span class="status-badge status-available">Active</span>' : '<span class="status-badge status-cancelled">Inactive</span>'}</td>
+                    <td>
+                        <button class="btn btn-sm btn-secondary" onclick="showDoctorDetail(${d.id})">View</button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteDoctor(${d.id}, '${d.full_name}')">Delete</button>
+                    </td>
+                </tr>
+            `).join('');
+        };
+
+        window.deleteDoctor = async function(id, name) {
+            if (!confirm(`Delete doctor ${name}? This action cannot be undone.`)) return;
+            try {
+                await apiRequest(`/doctors/${id}/`, { method: 'DELETE' });
+                showToast(`Doctor ${name} deleted successfully`);
+                renderDoctors();
+            } catch (e) { showToast(e.message, 'error'); }
+        };
+
+        window.showAddDoctorModal = async function() {
+            try {
+                const users = await apiRequest('/users/by_role/?role=doctor');
+                const modal = document.createElement('div');
+                modal.className = 'modal-overlay active';
+                modal.innerHTML = `
+                    <div class="modal">
+                        <h2>Add Doctor Profile</h2>
+                        <form id="addDoctorForm">
+                            <div class="form-group">
+                                <label>Doctor User</label>
+                                <select id="dUser" required>
+                                    <option value="">-- Select --</option>
+                                    ${users.map(u => `<option value="${u.id}">${u.first_name} ${u.last_name} (${u.username})</option>`).join('')}
+                                </select>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group"><label>Specialization</label><select id="dSpecialization" required><option value="">-- Select --</option>${SPECIALIZATIONS.map(s => `<option value="${s}">${s}</option>`).join('')}</select></div>
+                                <div class="form-group"><label>Qualification</label><input type="text" id="dQualification" required></div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group"><label>Experience (years)</label><input type="number" id="dExperience" value="0"></div>
+                                <div class="form-group"><label>Consultation Fee ($)</label><input type="number" id="dFee" step="0.01" value="0"></div>
+                            </div>
+                            <div class="form-group"><label>Available Days</label><input type="text" id="dDays" placeholder="Mon,Tue,Wed,Thu,Fri"></div>
+                            <div class="form-row">
+                                <div class="form-group"><label>Start Time</label><input type="time" id="dStart"></div>
+                                <div class="form-group"><label>End Time</label><input type="time" id="dEnd"></div>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Add Doctor</button>
+                            <button type="button" class="btn btn-secondary" style="margin-left:8px" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
+                        </form>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+                document.getElementById('addDoctorForm').addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const data = {
+                        user_id: parseInt(document.getElementById('dUser').value),
+                        specialization: document.getElementById('dSpecialization').value,
+                        qualification: document.getElementById('dQualification').value,
+                        experience_years: parseInt(document.getElementById('dExperience').value) || 0,
+                        consultation_fee: parseFloat(document.getElementById('dFee').value) || 0,
+                        available_days: document.getElementById('dDays').value,
+                        available_time_start: document.getElementById('dStart').value || null,
+                        available_time_end: document.getElementById('dEnd').value || null,
+                    };
+                    try {
+                        await apiRequest('/doctors/', { method: 'POST', body: JSON.stringify(data) });
+                        showToast('Doctor added successfully');
+                        modal.remove();
+                        renderDoctors();
+                    } catch (e) { showToast(e.message, 'error'); }
+                });
+            } catch (e) { showToast(e.message, 'error'); }
+        };
+
+        window.showDoctorDetail = async function(id) {
+            try {
+                const doc = await apiRequest(`/doctors/${id}/`);
+                const apps = await apiRequest(`/doctors/${id}/appointments/`);
+                const modal = document.createElement('div');
+                modal.className = 'modal-overlay active';
+                modal.innerHTML = `
+                    <div class="modal" style="width:700px">
+                        <h2>Dr. ${doc.user.first_name} ${doc.user.last_name}</h2>
+                        <div class="stats-grid" style="grid-template-columns:1fr 1fr 1fr">
+                            <div class="stat-card"><div class="stat-value" style="font-size:20px">${doc.specialization}</div><div class="stat-label">Specialization</div></div>
+                            <div class="stat-card"><div class="stat-value">${doc.qualification}</div><div class="stat-label">Qualification</div></div>
+                            <div class="stat-card"><div class="stat-value">${doc.experience_years} yrs</div><div class="stat-label">Experience</div></div>
+                        </div>
+                        <p><strong>Consultation Fee:</strong> $${doc.consultation_fee} | <strong>Available:</strong> ${doc.available_days || 'Not set'} ${doc.available_time_start ? doc.available_time_start + ' - ' + doc.available_time_end : ''}</p>
+                        <hr style="margin:16px 0">
+                        <h3>Appointments</h3>
+                        <table><thead><tr><th>Patient</th><th>Date</th><th>Time</th><th>Status</th></tr></thead>
+                        <tbody>${(apps || []).map(a => `<tr><td>${a.patient_name}</td><td>${formatDate(a.appointment_date)}</td><td>${a.appointment_time}</td><td><span class="status-badge status-${a.status}">${a.status}</span></td></tr>`).join('') || '<tr><td colspan="4">No appointments</td></tr>'}</tbody></table>
+                        <button class="btn btn-secondary mt-16" onclick="this.closest('.modal-overlay').remove()">Close</button>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+            } catch (e) { showToast(e.message, 'error'); }
+        };
+
+        // =========== APPOINTMENTS ===========
+        async function renderAppointments() {
+            const el = document.getElementById('pageContent');
+            try {
+                const apps = await apiRequest('/appointments/');
+                const doctors = await apiRequest('/doctors/');
+                const patients = await apiRequest('/patients/');
+                const today = new Date().toISOString().split('T')[0];
+                el.innerHTML = `
+                    <div class="flex-between mb-16">
+                        <div class="flex gap-8">
+                            <input type="date" id="filterDate" value="${today}" onchange="filterAppointments()">
+                            <select id="filterStatus" onchange="filterAppointments()">
+                                <option value="">All Status</option>
+                                <option value="scheduled">Scheduled</option>
+                                <option value="completed">Completed</option>
+                                <option value="cancelled">Cancelled</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-primary" onclick="showAddAppointmentModal()">+ Schedule Appointment</button>
+                    </div>
+                    <div class="table-container">
+                        <table>
+                            <thead><tr><th>Patient</th><th>Doctor</th><th>Date</th><th>Time</th><th>Symptoms</th><th>Status</th><th>Actions</th></tr></thead>
+                            <tbody id="appsBody"></tbody>
+                        </table>
+                    </div>
+                `;
+                window._allApps = apps;
+                window._doctors = doctors;
+                window._patients = patients;
+                filterAppointments();
+            } catch (e) { el.innerHTML = `<p style="color:var(--danger)">${e.message}</p>`; }
+        }
+
+        window.filterAppointments = function() {
+            const date = document.getElementById('filterDate').value;
+            const status = document.getElementById('filterStatus').value;
+            let filtered = window._allApps || [];
+            if (date) filtered = filtered.filter(a => a.appointment_date === date);
+            if (status) filtered = filtered.filter(a => a.status === status);
+            const tbody = document.getElementById('appsBody');
+            tbody.innerHTML = filtered.map(a => `
+                <tr>
+                    <td>${a.patient_name}</td>
+                    <td>${a.doctor_name}</td>
+                    <td>${formatDate(a.appointment_date)}</td>
+                    <td>${a.appointment_time}</td>
+                    <td>${a.symptoms || '-'}</td>
+                    <td><span class="status-badge status-${a.status}">${a.status}</span></td>
+                    <td>
+                        ${a.status === 'scheduled' ? `<button class="btn btn-sm btn-success" onclick="completeAppointment(${a.id})">Complete</button> <button class="btn btn-sm btn-danger" onclick="cancelAppointment(${a.id})">Cancel</button>` : ''}
+                    </td>
+                </tr>
+            `).join('');
+        };
+
+        window.cancelAppointment = async function(id) {
+            try {
+                await apiRequest(`/appointments/${id}/cancel/`, { method: 'POST' });
+                showToast('Appointment cancelled');
+                renderAppointments();
+            } catch (e) { showToast(e.message, 'error'); }
+        };
+
+        window.showAddAppointmentModal = function() {
+            const doctors = window._doctors || [];
+            const patients = window._patients || [];
+            const modal = document.createElement('div');
+            modal.className = 'modal-overlay active';
+            modal.innerHTML = `
+                <div class="modal">
+                    <h2>Schedule Appointment</h2>
+                    <form id="addApptForm">
+                        <div class="form-group">
+                            <label>Patient</label>
+                            <select id="aPatient" required><option value="">-- Select --</option>${patients.map(p => `<option value="${p.id}">${p.first_name} ${p.last_name}</option>`).join('')}</select>
+                        </div>
+                        <div class="form-group">
+                            <label>Doctor</label>
+                            <select id="aDoctor" required><option value="">-- Select --</option>${doctors.map(d => `<option value="${d.id}">${d.full_name}</option>`).join('')}</select>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group"><label>Date</label><input type="date" id="aDate" required></div>
+                            <div class="form-group"><label>Time</label><input type="time" id="aTime" required></div>
+                        </div>
+                        <div class="form-group"><label>Symptoms</label><textarea id="aSymptoms" rows="2"></textarea></div>
+                        <button type="submit" class="btn btn-primary">Schedule</button>
+                        <button type="button" class="btn btn-secondary" style="margin-left:8px" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
+                    </form>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            document.getElementById('addApptForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const data = {
+                    patient: parseInt(document.getElementById('aPatient').value),
+                    doctor: parseInt(document.getElementById('aDoctor').value),
+                    appointment_date: document.getElementById('aDate').value,
+                    appointment_time: document.getElementById('aTime').value,
+                    symptoms: document.getElementById('aSymptoms').value,
+                };
+                try {
+                    await apiRequest('/appointments/', { method: 'POST', body: JSON.stringify(data) });
+                    showToast('Appointment scheduled');
+                    modal.remove();
+                    renderAppointments();
+                } catch (e) { showToast(e.message, 'error'); }
+            });
+        };
+
+        // =========== PHARMACY ===========
+        async function renderPharmacy() {
+            const el = document.getElementById('pageContent');
+            try {
+                const meds = await apiRequest('/medicines/');
+                el.innerHTML = `
+                    <div class="flex-between mb-16">
+                        <div class="flex gap-8">
+                            <button class="btn btn-sm btn-warning" onclick="loadPharmacyFilter('low_stock')">Low Stock</button>
+                            <button class="btn btn-sm btn-danger" onclick="loadPharmacyFilter('expired')">Expired</button>
+                            <button class="btn btn-sm btn-secondary" onclick="loadPharmacyFilter('expiring_soon')">Expiring Soon</button>
+                            <button class="btn btn-sm btn-primary" onclick="renderPharmacy()">All</button>
+                        </div>
+                        <button class="btn btn-primary" onclick="showAddMedicineModal()">+ Add Medicine</button>
+                    </div>
+                    <div class="table-container">
+                        <table>
+                            <thead><tr><th>Name</th><th>Brand</th><th>Category</th><th>Stock</th><th>Price</th><th>Expiry</th><th>Alerts</th><th>Actions</th></tr></thead>
+                            <tbody>${meds.map(m => `
+                                <tr style="${m.is_expired ? 'background:#fee2e2' : m.is_low_stock ? 'background:#fef3c7' : ''}">
+                                    <td>${m.name}</td>
+                                    <td>${m.brand || '-'}</td>
+                                    <td>${m.category}</td>
+                                    <td>${m.stock_quantity}</td>
+                                    <td>$${m.price_per_unit}</td>
+                                    <td>${formatDate(m.expiry_date)}</td>
+                                    <td>${m.is_expired ? '<span class="status-badge status-cancelled">EXPIRED</span>' : m.is_low_stock ? '<span class="status-badge status-pending">LOW STOCK</span>' : '-'}</td>
+                                    <td><button class="btn btn-sm btn-secondary" onclick="editMedicine(${m.id})">Edit</button></td>
+                                </tr>
+                            `).join('')}</tbody>
+                        </table>
+                    </div>
+                `;
+            } catch (e) { el.innerHTML = `<p style="color:var(--danger)">${e.message}</p>`; }
+        }
+
+        window.loadPharmacyFilter = async function(filter) {
+            try {
+                const meds = await apiRequest(`/medicines/${filter}/`);
+                const tbody = document.querySelector('#pageContent table tbody');
+                if (tbody) {
+                    tbody.innerHTML = meds.map(m => `
+                        <tr style="${m.is_expired ? 'background:#fee2e2' : 'background:#fef3c7'}">
+                            <td>${m.name}</td>
+                            <td>${m.brand || '-'}</td>
+                            <td>${m.category}</td>
+                            <td>${m.stock_quantity}</td>
+                            <td>$${m.price_per_unit}</td>
+                            <td>${formatDate(m.expiry_date)}</td>
+                            <td>${m.is_expired ? '<span class="status-badge status-cancelled">EXPIRED</span>' : '<span class="status-badge status-pending">LOW STOCK</span>'}</td>
+                            <td><button class="btn btn-sm btn-secondary">Edit</button></td>
+                        </tr>
+                    `).join('');
+                }
+            } catch (e) { showToast(e.message, 'error'); }
+        };
+
+        window.showAddMedicineModal = function() {
+            const modal = document.createElement('div');
+            modal.className = 'modal-overlay active';
+            modal.innerHTML = `
+                <div class="modal">
+                    <h2>Add Medicine</h2>
+                    <form id="addMedicineForm">
+                        <div class="form-row">
+                            <div class="form-group"><label>Name</label><input type="text" id="mName" required></div>
+                            <div class="form-group"><label>Brand</label><input type="text" id="mBrand"></div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group"><label>Category</label><select id="mCategory"><option value="tablet">Tablet</option><option value="capsule">Capsule</option><option value="syrup">Syrup</option><option value="injection">Injection</option><option value="cream">Cream</option><option value="drops">Drops</option></select></div>
+                            <div class="form-group"><label>Unit</label><input type="text" id="mUnit" value="strip"></div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group"><label>Stock Quantity</label><input type="number" id="mStock" value="0"></div>
+                            <div class="form-group"><label>Price per Unit ($)</label><input type="number" id="mPrice" step="0.01" value="0"></div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group"><label>Expiry Date</label><input type="date" id="mExpiry" required></div>
+                            <div class="form-group"><label>Manufacturer</label><input type="text" id="mManufacturer"></div>
+                        </div>
+                        <div class="form-group"><label>Description</label><textarea id="mDescription" rows="2"></textarea></div>
+                        <div class="form-group"><label><input type="checkbox" id="mPrescription" checked> Requires Prescription</label></div>
+                        <button type="submit" class="btn btn-primary">Add Medicine</button>
+                        <button type="button" class="btn btn-secondary" style="margin-left:8px" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
+                    </form>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            document.getElementById('addMedicineForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const data = {
+                    name: document.getElementById('mName').value,
+                    brand: document.getElementById('mBrand').value,
+                    category: document.getElementById('mCategory').value,
+                    unit: document.getElementById('mUnit').value,
+                    stock_quantity: parseInt(document.getElementById('mStock').value) || 0,
+                    price_per_unit: parseFloat(document.getElementById('mPrice').value) || 0,
+                    expiry_date: document.getElementById('mExpiry').value,
+                    manufacturer: document.getElementById('mManufacturer').value,
+                    description: document.getElementById('mDescription').value,
+                    requires_prescription: document.getElementById('mPrescription').checked,
+                };
+                try {
+                    await apiRequest('/medicines/', { method: 'POST', body: JSON.stringify(data) });
+                    showToast('Medicine added');
+                    modal.remove();
+                    renderPharmacy();
+                } catch (e) { showToast(e.message, 'error'); }
+            });
+        };
+
+        window.editMedicine = async function(id) {
+            try {
+                const m = await apiRequest(`/medicines/${id}/`);
+                const modal = document.createElement('div');
+                modal.className = 'modal-overlay active';
+                modal.innerHTML = `
+                    <div class="modal">
+                        <h2>Edit Medicine</h2>
+                        <form id="editMedicineForm">
+                            <div class="form-row">
+                                <div class="form-group"><label>Name</label><input type="text" id="mName" value="${m.name}" required></div>
+                                <div class="form-group"><label>Brand</label><input type="text" id="mBrand" value="${m.brand || ''}"></div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group"><label>Stock</label><input type="number" id="mStock" value="${m.stock_quantity}"></div>
+                                <div class="form-group"><label>Price ($)</label><input type="number" id="mPrice" step="0.01" value="${m.price_per_unit}"></div>
+                            </div>
+                            <div class="form-group"><label>Expiry Date</label><input type="date" id="mExpiry" value="${m.expiry_date}"></div>
+                            <button type="submit" class="btn btn-primary">Update</button>
+                            <button type="button" class="btn btn-secondary" style="margin-left:8px" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
+                        </form>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+                document.getElementById('editMedicineForm').addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const data = {
+                        name: document.getElementById('mName').value,
+                        brand: document.getElementById('mBrand').value,
+                        stock_quantity: parseInt(document.getElementById('mStock').value) || 0,
+                        price_per_unit: parseFloat(document.getElementById('mPrice').value) || 0,
+                        expiry_date: document.getElementById('mExpiry').value,
+                    };
+                    try {
+                        await apiRequest(`/medicines/${id}/`, { method: 'PATCH', body: JSON.stringify(data) });
+                        showToast('Medicine updated');
+                        modal.remove();
+                        renderPharmacy();
+                    } catch (e) { showToast(e.message, 'error'); }
+                });
+            } catch (e) { showToast(e.message, 'error'); }
+        };
+
+        // =========== PRESCRIPTIONS ===========
+        async function renderPrescriptions() {
+            const el = document.getElementById('pageContent');
+            try {
+                const prescs = await apiRequest('/prescriptions/');
+                const patients = await apiRequest('/patients/');
+                const doctors = await apiRequest('/doctors/');
+                const meds = await apiRequest('/medicines/');
+                el.innerHTML = `
+                    <div class="flex-between mb-16">
+                        <div></div>
+                        <button class="btn btn-primary" onclick="showAddPrescriptionModal()">+ New Prescription</button>
+                    </div>
+                    <div class="table-container">
+                        <table>
+                            <thead><tr><th>Patient</th><th>Doctor</th><th>Date</th><th>Diagnosis</th><th>Status</th><th>Actions</th></tr></thead>
+                            <tbody>${prescs.map(p => `
+                                <tr>
+                                    <td>${p.patient_name}</td>
+                                    <td>${p.doctor_name}</td>
+                                    <td>${formatDate(p.prescribed_date)}</td>
+                                    <td>${p.diagnosis?.substring(0, 50) || ''}</td>
+                                    <td>${p.is_active ? '<span class="status-badge status-available">Active</span>' : '<span class="status-badge status-completed">Filled</span>'}</td>
+                                    <td>
+                                        <button class="btn btn-sm btn-secondary" onclick="viewPrescription(${p.id})">View</button>
+                                        ${p.is_active && role === 'pharmacist' ? `<button class="btn btn-sm btn-success" onclick="fillPrescription(${p.id})">Fill</button>` : ''}
+                                    </td>
+                                </tr>
+                            `).join('')}</tbody>
+                        </table>
+                    </div>
+                `;
+                window._prescPatients = patients;
+                window._prescDoctors = doctors;
+                window._prescMeds = meds;
+            } catch (e) { el.innerHTML = `<p style="color:var(--danger)">${e.message}</p>`; }
+        }
+
+        window.viewPrescription = async function(id) {
+            try {
+                const p = await apiRequest(`/prescriptions/${id}/`);
+                const modal = document.createElement('div');
+                modal.className = 'modal-overlay active';
+                modal.innerHTML = `
+                    <div class="modal" style="width:600px">
+                        <h2>Prescription</h2>
+                        <p><strong>Patient:</strong> ${p.patient_name} | <strong>Doctor:</strong> ${p.doctor_name} | <strong>Date:</strong> ${formatDate(p.prescribed_date)}</p>
+                        <p><strong>Diagnosis:</strong> ${p.diagnosis}</p>
+                        <p><strong>Notes:</strong> ${p.notes || 'None'}</p>
+                        <hr style="margin:16px 0">
+                        <h3>Medicines</h3>
+                        <table><thead><tr><th>Medicine</th><th>Dosage</th><th>Duration</th><th>Qty</th></tr></thead>
+                        <tbody>${(p.items || []).map(i => `<tr><td>${i.medicine_name}</td><td>${i.dosage}</td><td>${i.duration}</td><td>${i.quantity}</td></tr>`).join('') || '<tr><td colspan="4">No items</td></tr>'}</tbody></table>
+                        <button class="btn btn-secondary mt-16" onclick="this.closest('.modal-overlay').remove()">Close</button>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+            } catch (e) { showToast(e.message, 'error'); }
+        };
+
+        window.fillPrescription = async function(id) {
+            if (!confirm('Fill this prescription? This will deduct stock.')) return;
+            try {
+                await apiRequest(`/prescriptions/${id}/fill/`, { method: 'POST' });
+                showToast('Prescription filled');
+                renderPrescriptions();
+            } catch (e) { showToast(e.message, 'error'); }
+        };
+
+        window.showAddPrescriptionModal = function() {
+            const patients = window._prescPatients || [];
+            const doctors = window._prescDoctors || [];
+            const meds = window._prescMeds || [];
+            const modal = document.createElement('div');
+            modal.className = 'modal-overlay active';
+            modal.innerHTML = `
+                <div class="modal" style="width:600px">
+                    <h2>New Prescription</h2>
+                    <form id="addPrescForm">
+                        <div class="form-row">
+                            <div class="form-group"><label>Patient</label><select id="prPatient" required><option value="">--</option>${patients.map(p => `<option value="${p.id}">${p.first_name} ${p.last_name}</option>`).join('')}</select></div>
+                            <div class="form-group"><label>Doctor</label><select id="prDoctor" required><option value="">--</option>${doctors.map(d => `<option value="${d.id}">${d.full_name}</option>`).join('')}</select></div>
+                        </div>
+                        <div class="form-group"><label>Diagnosis</label><textarea id="prDiagnosis" rows="2" required></textarea></div>
+                        <div class="form-group"><label>Notes</label><textarea id="prNotes" rows="2"></textarea></div>
+                        <hr><h3>Medicines</h3>
+                        <div id="medicineItems">
+                            <div class="med-item form-row" style="margin-bottom:8px">
+                                <div class="form-group"><label>Medicine</label><select class="med-select"><option value="">--</option>${meds.map(m => `<option value="${m.id}">${m.name}</option>`).join('')}</select></div>
+                                <div class="form-group"><label>Dosage</label><input type="text" class="med-dosage" placeholder="1+0+1"></div>
+                                <div class="form-group"><label>Duration</label><input type="text" class="med-duration" placeholder="5 days"></div>
+                                <div class="form-group"><label>Qty</label><input type="number" class="med-qty" value="1"></div>
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-secondary mb-16" onclick="addMedicineItem()">+ Add Medicine</button><br>
+                        <button type="submit" class="btn btn-primary">Create Prescription</button>
+                        <button type="button" class="btn btn-secondary" style="margin-left:8px" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
+                    </form>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            document.getElementById('addPrescForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const items = document.querySelectorAll('.med-item');
+                const medItems = [];
+                items.forEach(item => {
+                    const mid = item.querySelector('.med-select').value;
+                    if (mid) {
+                        medItems.push({
+                            medicine_id: parseInt(mid),
+                            dosage: item.querySelector('.med-dosage').value,
+                            duration: item.querySelector('.med-duration').value,
+                            quantity: parseInt(item.querySelector('.med-qty').value) || 1,
+                            instructions: ''
+                        });
+                    }
+                });
+                const data = {
+                    patient: parseInt(document.getElementById('prPatient').value),
+                    doctor: parseInt(document.getElementById('prDoctor').value),
+                    diagnosis: document.getElementById('prDiagnosis').value,
+                    notes: document.getElementById('prNotes').value,
+                    items: medItems,
+                };
+                try {
+                    const presc = await apiRequest('/prescriptions/', { method: 'POST', body: JSON.stringify({
+                        patient: data.patient, doctor: data.doctor,
+                        diagnosis: data.diagnosis, notes: data.notes
+                    })});
+                    for (const item of medItems) {
+                        await apiRequest(`/prescriptions/${presc.id}/add_item/`, { method: 'POST', body: JSON.stringify(item) });
+                    }
+                    showToast('Prescription created');
+                    modal.remove();
+                    renderPrescriptions();
+                } catch (e) { showToast(e.message, 'error'); }
+            });
+        };
+
+        window.addMedicineItem = function() {
+            const meds = window._prescMeds || [];
+            const container = document.getElementById('medicineItems');
+            const item = document.createElement('div');
+            item.className = 'med-item form-row';
+            item.style.marginBottom = '8px';
+            item.innerHTML = `
+                <div class="form-group"><label>Medicine</label><select class="med-select"><option value="">--</option>${meds.map(m => `<option value="${m.id}">${m.name}</option>`).join('')}</select></div>
+                <div class="form-group"><label>Dosage</label><input type="text" class="med-dosage" placeholder="1+0+1"></div>
+                <div class="form-group"><label>Duration</label><input type="text" class="med-duration" placeholder="5 days"></div>
+                <div class="form-group"><label>Qty</label><input type="number" class="med-qty" value="1"></div>
+            `;
+            container.appendChild(item);
+        };
+
+        // =========== BILLING ===========
+        async function renderBilling() {
+            const el = document.getElementById('pageContent');
+            try {
+                const bills = await apiRequest('/bills/');
+                el.innerHTML = `
+                    <div class="flex-between mb-16">
+                        <div></div>
+                        <button class="btn btn-primary" onclick="showAddBillModal()">+ Create Bill</button>
+                    </div>
+                    <div class="table-container">
+                        <table>
+                            <thead><tr><th>ID</th><th>Patient</th><th>Total</th><th>Paid</th><th>Due</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead>
+                            <tbody>${bills.map(b => `
+                                <tr>
+                                    <td>#${b.id}</td>
+                                    <td>${b.patient_name}</td>
+                                    <td>$${b.total_amount}</td>
+                                    <td>$${b.paid_amount}</td>
+                                    <td>$${b.due_amount}</td>
+                                    <td>${formatDate(b.bill_date)}</td>
+                                    <td><span class="status-badge status-${b.status}">${b.status}</span></td>
+                                    <td>
+                                        <button class="btn btn-sm btn-secondary" onclick="viewBill(${b.id})">View</button>
+                                        ${b.status !== 'paid' ? `<button class="btn btn-sm btn-success" onclick="showAddPaymentModal(${b.id})">Pay</button>` : ''}
+                                    </td>
+                                </tr>
+                            `).join('')}</tbody>
+                        </table>
+                    </div>
+                `;
+            } catch (e) { el.innerHTML = `<p style="color:var(--danger)">${e.message}</p>`; }
+        }
+
+        window.viewBill = async function(id) {
+            try {
+                const b = await apiRequest(`/bills/${id}/`);
+                const modal = document.createElement('div');
+                modal.className = 'modal-overlay active';
+                modal.innerHTML = `
+                    <div class="modal" style="width:600px">
+                        <h2>Bill #${b.id}</h2>
+                        <p><strong>Patient:</strong> ${b.patient_name} | <strong>Date:</strong> ${formatDate(b.bill_date)}</p>
+                        <p><strong>Total:</strong> $${b.total_amount} | <strong>Paid:</strong> $${b.paid_amount} | <strong>Due:</strong> $${b.due_amount}</p>
+                        <p><strong>Status:</strong> <span class="status-badge status-${b.status}">${b.status}</span></p>
+                        <hr style="margin:16px 0">
+                        <h3>Items</h3>
+                        <table><thead><tr><th>Description</th><th>Qty</th><th>Price</th><th>Amount</th></tr></thead>
+                        <tbody>${(b.items || []).map(i => `<tr><td>${i.description}</td><td>${i.quantity}</td><td>$${i.unit_price}</td><td>$${i.amount}</td></tr>`).join('') || '<tr><td colspan="4">No items</td></tr>'}</tbody></table>
+                        <button class="btn btn-secondary mt-16" onclick="this.closest('.modal-overlay').remove()">Close</button>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+            } catch (e) { showToast(e.message, 'error'); }
+        };
+
+        window.showAddPaymentModal = async function(billId) {
+            const b = await apiRequest(`/bills/${billId}/`);
+            const modal = document.createElement('div');
+            modal.className = 'modal-overlay active';
+            modal.innerHTML = `
+                <div class="modal">
+                    <h2>Add Payment</h2>
+                    <p>Bill #${b.id} - Due: $${b.due_amount}</p>
+                    <form id="paymentForm">
+                        <div class="form-group"><label>Amount ($)</label><input type="number" id="payAmount" step="0.01" max="${b.due_amount}" required></div>
+                        <button type="submit" class="btn btn-success">Record Payment</button>
+                        <button type="button" class="btn btn-secondary" style="margin-left:8px" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
+                    </form>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            document.getElementById('paymentForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                try {
+                    await apiRequest(`/bills/${billId}/add_payment/`, { method: 'POST', body: JSON.stringify({ amount: parseFloat(document.getElementById('payAmount').value) }) });
+                    showToast('Payment recorded');
+                    modal.remove();
+                    renderBilling();
+                } catch (e) { showToast(e.message, 'error'); }
+            });
+        };
+
+        window.showAddBillModal = function() {
+            const patients = window._patients || [];
+            const modal = document.createElement('div');
+            modal.className = 'modal-overlay active';
+            modal.innerHTML = `
+                <div class="modal" style="width:600px">
+                    <h2>Create Bill</h2>
+                    <form id="addBillForm">
+                        <div class="form-group"><label>Patient</label><select id="bPatient" required><option value="">--</option>${patients.map(p => `<option value="${p.id}">${p.first_name} ${p.last_name}</option>`).join('')}</select></div>
+                        <div id="billItems">
+                            <div class="bill-item form-row">
+                                <div class="form-group"><label>Description</label><input type="text" class="bill-desc" required></div>
+                                <div class="form-group"><label>Qty</label><input type="number" class="bill-qty" value="1"></div>
+                                <div class="form-group"><label>Unit Price ($)</label><input type="number" class="bill-price" step="0.01" value="0"></div>
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-secondary mb-16" onclick="addBillItem()">+ Add Item</button><br>
+                        <button type="submit" class="btn btn-primary">Create Bill</button>
+                        <button type="button" class="btn btn-secondary" style="margin-left:8px" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
+                    </form>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            document.getElementById('addBillForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const items = document.querySelectorAll('.bill-item');
+                const billItems = [];
+                items.forEach(item => {
+                    const desc = item.querySelector('.bill-desc').value;
+                    if (desc) {
+                        billItems.push({
+                            description: desc,
+                            quantity: parseInt(item.querySelector('.bill-qty').value) || 1,
+                            unit_price: parseFloat(item.querySelector('.bill-price').value) || 0,
+                        });
+                    }
+                });
+                try {
+                    const bill = await apiRequest('/bills/', { method: 'POST', body: JSON.stringify({ patient: parseInt(document.getElementById('bPatient').value) }) });
+                    for (const item of billItems) {
+                        item.amount = item.quantity * item.unit_price;
+                        await apiRequest(`/bills/${bill.id}/add_item/`, { method: 'POST', body: JSON.stringify(item) });
+                    }
+                    showToast('Bill created');
+                    modal.remove();
+                    renderBilling();
+                } catch (e) { showToast(e.message, 'error'); }
+            });
+        };
+
+        window.addBillItem = function() {
+            const container = document.getElementById('billItems');
+            const item = document.createElement('div');
+            item.className = 'bill-item form-row';
+            item.innerHTML = `
+                <div class="form-group"><label>Description</label><input type="text" class="bill-desc"></div>
+                <div class="form-group"><label>Qty</label><input type="number" class="bill-qty" value="1"></div>
+                <div class="form-group"><label>Unit Price ($)</label><input type="number" class="bill-price" step="0.01" value="0"></div>
+            `;
+            container.appendChild(item);
+        };
+
+        // =========== ROOMS ===========
+        async function renderRooms() {
+            const el = document.getElementById('pageContent');
+            try {
+                const rooms = await apiRequest('/rooms/');
+                el.innerHTML = `
+                    <div class="flex-between mb-16">
+                        <div></div>
+                        <button class="btn btn-primary" onclick="showAddRoomModal()">+ Add Room</button>
+                    </div>
+                    <div class="table-container">
+                        <table>
+                            <thead><tr><th>Room #</th><th>Type</th><th>Price/Day</th><th>Capacity</th><th>Occupied</th><th>Status</th><th>Actions</th></tr></thead>
+                            <tbody>${rooms.map(r => `
+                                <tr>
+                                    <td>${r.room_number}</td>
+                                    <td>${r.room_type}</td>
+                                    <td>$${r.price_per_day}</td>
+                                    <td>${r.capacity}</td>
+                                    <td>${r.current_occupancy}</td>
+                                    <td><span class="status-badge status-${r.status}">${r.status}</span></td>
+                                    <td><button class="btn btn-sm btn-secondary" onclick="showRoomDetail(${r.id})">View</button></td>
+                                </tr>
+                            `).join('')}</tbody>
+                        </table>
+                    </div>
+                `;
+            } catch (e) { el.innerHTML = `<p style="color:var(--danger)">${e.message}</p>`; }
+        }
+
+        window.showAddRoomModal = function() {
+            const modal = document.createElement('div');
+            modal.className = 'modal-overlay active';
+            modal.innerHTML = `
+                <div class="modal">
+                    <h2>Add Room</h2>
+                    <form id="addRoomForm">
+                        <div class="form-row">
+                            <div class="form-group"><label>Room Number</label><input type="text" id="rNumber" required></div>
+                            <div class="form-group"><label>Type</label><select id="rType"><option value="general">General Ward</option><option value="semi_private">Semi-Private</option><option value="private">Private</option><option value="icu">ICU</option><option value="nicu">NICU</option></select></div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group"><label>Price per Day ($)</label><input type="number" id="rPrice" step="0.01" value="0"></div>
+                            <div class="form-group"><label>Capacity</label><input type="number" id="rCapacity" value="1"></div>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Add Room</button>
+                        <button type="button" class="btn btn-secondary" style="margin-left:8px" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
+                    </form>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            document.getElementById('addRoomForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const data = {
+                    room_number: document.getElementById('rNumber').value,
+                    room_type: document.getElementById('rType').value,
+                    price_per_day: parseFloat(document.getElementById('rPrice').value) || 0,
+                    capacity: parseInt(document.getElementById('rCapacity').value) || 1,
+                };
+                try {
+                    await apiRequest('/rooms/', { method: 'POST', body: JSON.stringify(data) });
+                    showToast('Room added');
+                    modal.remove();
+                    renderRooms();
+                } catch (e) { showToast(e.message, 'error'); }
+            });
+        };
+
+        window.showRoomDetail = async function(id) {
+            try {
+                const room = await apiRequest(`/rooms/${id}/`);
+                const allocs = await apiRequest(`/rooms/${id}/allocations/`);
+                const modal = document.createElement('div');
+                modal.className = 'modal-overlay active';
+                modal.innerHTML = `
+                    <div class="modal" style="width:600px">
+                        <h2>Room ${room.room_number}</h2>
+                        <p><strong>Type:</strong> ${room.room_type} | <strong>Price:</strong> $${room.price_per_day}/day</p>
+                        <p><strong>Capacity:</strong> ${room.capacity} | <strong>Occupied:</strong> ${room.current_occupancy} | <strong>Status:</strong> <span class="status-badge status-${room.status}">${room.status}</span></p>
+                        <hr style="margin:16px 0">
+                        <h3>Current Occupants</h3>
+                        <table><thead><tr><th>Patient</th><th>Check In</th></tr></thead>
+                        <tbody>${(allocs || []).map(a => `<tr><td>${a.patient_name}</td><td>${formatDateTime(a.check_in)}</td></tr>`).join('') || '<tr><td colspan="2">No occupants</td></tr>'}</tbody></table>
+                        <button class="btn btn-secondary mt-16" onclick="this.closest('.modal-overlay').remove()">Close</button>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+            } catch (e) { showToast(e.message, 'error'); }
+        };
+
+        // =========== USERS ===========
+        async function renderUsers() {
+            const el = document.getElementById('pageContent');
+            try {
+                const users = await apiRequest('/users/');
+                el.innerHTML = `
+                    <div class="flex-between mb-16">
+                        <div></div>
+                        <button class="btn btn-primary" onclick="showAddUserModal()">+ Create User</button>
+                    </div>
+                    <div class="table-container">
+                        <table>
+                            <thead><tr><th>Username</th><th>Name</th><th>Email</th><th>Role</th><th>Phone</th></tr></thead>
+                            <tbody>${users.map(u => `
+                                <tr>
+                                    <td>${u.username}</td>
+                                    <td>${u.first_name} ${u.last_name}</td>
+                                    <td>${u.email || '-'}</td>
+                                    <td><span class="status-badge status-scheduled">${u.profile?.role || 'N/A'}</span></td>
+                                    <td>${u.profile?.phone || '-'}</td>
+                                </tr>
+                            `).join('')}</tbody>
+                        </table>
+                    </div>
+                `;
+            } catch (e) { el.innerHTML = `<p style="color:var(--danger)">${e.message}</p>`; }
+        }
+
+        window.showAddUserModal = function() {
+            const modal = document.createElement('div');
+            modal.className = 'modal-overlay active';
+            modal.innerHTML = `
+                <div class="modal">
+                    <h2>Create New User</h2>
+                    <form id="addUserForm">
+                        <div class="form-row">
+                            <div class="form-group"><label>Username</label><input type="text" id="uUsername" required></div>
+                            <div class="form-group"><label>Password</label><input type="password" id="uPassword" required minlength="6"></div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group"><label>First Name</label><input type="text" id="uFirstName"></div>
+                            <div class="form-group"><label>Last Name</label><input type="text" id="uLastName"></div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group"><label>Email</label><input type="email" id="uEmail"></div>
+                            <div class="form-group"><label>Role</label>
+                                <select id="uRole">
+                                    <option value="receptionist">Receptionist</option>
+                                    <option value="doctor">Doctor</option>
+                                    <option value="pharmacist">Pharmacist</option>
+                                    <option value="admin">Admin</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Create User</button>
+                        <button type="button" class="btn btn-secondary" style="margin-left:8px" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
+                    </form>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            document.getElementById('addUserForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const data = {
+                    username: document.getElementById('uUsername').value,
+                    password: document.getElementById('uPassword').value,
+                    first_name: document.getElementById('uFirstName').value,
+                    last_name: document.getElementById('uLastName').value,
+                    email: document.getElementById('uEmail').value,
+                    role: document.getElementById('uRole').value,
+                };
+                try {
+                    await apiRequest('/register/', { method: 'POST', body: JSON.stringify(data) });
+                    showToast('User created successfully');
+                    modal.remove();
+                    renderUsers();
+                } catch (e) { showToast(e.message, 'error'); }
+            });
+        };
+
+        // Initialize
+        showPage('overview');
+    </script>
+</body>
+</html>
