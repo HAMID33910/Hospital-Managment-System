@@ -35,10 +35,15 @@ async function apiRequest(endpoint, options = {}) {
         headers['Authorization'] = `Bearer ${token}`;
     }
 
-    const response = await fetch(`${API_BASE}${endpoint}`, {
-        ...options,
-        headers,
-    });
+    let response;
+    try {
+        response = await fetch(`${API_BASE}${endpoint}`, {
+            ...options,
+            headers,
+        });
+    } catch (networkErr) {
+        throw new Error('Network error: ' + networkErr.message);
+    }
 
     if (response.status === 401) {
         clearAuth();
@@ -46,11 +51,28 @@ async function apiRequest(endpoint, options = {}) {
         return null;
     }
 
+    const contentType = response.headers.get('content-type') || '';
+
+    if (!contentType.includes('application/json')) {
+        const text = await response.text();
+        if (!response.ok) {
+            // Extract meaningful error from HTML if possible
+            const match = text.match(/<title>(.*?)<\/title>/i);
+            const htmlTitle = match ? match[1] : '';
+            throw new Error(`Server error ${response.status}${htmlTitle ? ': ' + htmlTitle : ''} — endpoint may not exist: ${API_BASE}${endpoint}`);
+        }
+        return text;
+    }
+
     const data = await response.json();
+
     if (!response.ok) {
-        const msg = data.detail || data.error || JSON.stringify(data);
+        const msg = data && (data.detail || data.error || data.message)
+            ? (data.detail || data.error || data.message)
+            : JSON.stringify(data);
         throw new Error(msg);
     }
+
     return data;
 }
 
@@ -78,3 +100,29 @@ function logout() {
     clearAuth();
     window.location.href = '/';
 }
+
+// Exposed globally so dashboard.html can call it after payment
+window.refreshAllBillsTable = async function() {
+    try {
+        const bills = await apiRequest('/bills/');
+        const tbody = document.querySelector('.billing-main .table-container:last-child tbody');
+        if (!tbody) return;
+        tbody.innerHTML = bills.map(b => `
+            <tr>
+                <td>#${b.id}</td>
+                <td>${b.patient_name}</td>
+                <td>$${b.total_amount}</td>
+                <td>$${b.paid_amount}</td>
+                <td>$${b.due_amount}</td>
+                <td>${formatDate(b.bill_date)}</td>
+                <td><span class="status-badge status-${b.status}">${b.status}</span></td>
+                <td>
+                    <button class="btn btn-sm btn-secondary" onclick="viewBill(${b.id})">View</button>
+                    ${b.status !== 'paid' ? `<button class="btn btn-sm btn-success" onclick="showAddPaymentModal(${b.id})">Pay</button>` : ''}
+                </td>
+            </tr>
+        `).join('');
+    } catch (e) {
+        console.error('Failed to refresh bills table:', e);
+    }
+};

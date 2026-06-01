@@ -58,22 +58,17 @@
         function setupNav() {
             document.querySelectorAll('.sidebar-nav li').forEach(li => li.style.display = '');
             if (role === 'doctor') {
-                document.getElementById('navPharmacy').style.display = 'none';
                 document.getElementById('navBilling').style.display = 'none';
                 document.getElementById('navRooms').style.display = 'none';
                 document.getElementById('navUsers').style.display = 'none';
-                document.getElementById('navDoctors').style.display = 'none';
             } else if (role === 'pharmacist') {
                 document.getElementById('navPatients').style.display = 'none';
-                document.getElementById('navDoctors').style.display = 'none';
                 document.getElementById('navAppointments').style.display = 'none';
                 document.getElementById('navBilling').style.display = 'none';
                 document.getElementById('navRooms').style.display = 'none';
                 document.getElementById('navUsers').style.display = 'none';
                 document.getElementById('navPrescriptions').style.display = '';
             } else if (role === 'receptionist') {
-                document.getElementById('navPharmacy').style.display = 'none';
-                document.getElementById('navDoctors').style.display = 'none';
                 document.getElementById('navUsers').style.display = 'none';
                 document.getElementById('navPrescriptions').style.display = 'none';
             }
@@ -231,7 +226,7 @@
             try {
                 await apiRequest(`/appointments/${id}/mark_completed/`, { method: 'POST' });
                 showToast('Appointment marked completed');
-                renderOverview();
+                renderAppointments();
             } catch (e) { showToast(e.message, 'error'); }
         };
 
@@ -259,6 +254,7 @@
                                     <td>
                                         <button class="btn btn-sm btn-secondary" onclick="viewPatient(${p.id})">View</button>
                                         ${!p.is_admitted ? `<button class="btn btn-sm btn-success" onclick="showAdmitModal(${p.id}, '${p.first_name} ${p.last_name}')">Admit</button>` : `<button class="btn btn-sm btn-warning" onclick="dischargePatient(${p.id})">Discharge</button>`}
+                                        <button class="btn btn-sm btn-danger" onclick="deletePatient(${p.id}, '${p.first_name} ${p.last_name}')">Delete</button>
                                     </td>
                                 </tr>
                             `).join('')}</tbody>
@@ -290,7 +286,7 @@
                             <div class="form-group"><label>Email</label><input type="email" id="pEmail"></div>
                         </div>
                         <div class="form-row">
-                            <div class="form-group"><label>Blood Group</label><select id="pBlood"><option value="">Select</option><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>AB+</option><option>AB-</option><option>O+</option><option>O-</option></select></div>
+                            <div class="form-group"><label>Blood Group</label><select id="pBlood"><option value="">Select</option><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>AB+</option><option>AB-</option><option>O+</option><option>O-</option><option>do't know</option></select></div>
                             <div class="form-group"><label>Emergency Contact</label><input type="text" id="pEmergency"></div>
                         </div>
                         <div class="form-group"><label>Address</label><textarea id="pAddress" rows="2"></textarea></div>
@@ -399,6 +395,15 @@
             try {
                 await apiRequest(`/patients/${id}/discharge/`, { method: 'POST' });
                 showToast('Patient discharged');
+                renderPatients();
+            } catch (e) { showToast(e.message, 'error'); }
+        };
+
+        window.deletePatient = async function(id, name) {
+            if (!confirm(`Delete patient ${name}? This action cannot be undone.`)) return;
+            try {
+                await apiRequest(`/patients/${id}/`, { method: 'DELETE' });
+                showToast(`Patient ${name} deleted successfully`);
                 renderPatients();
             } catch (e) { showToast(e.message, 'error'); }
         };
@@ -566,7 +571,7 @@
                             <input type="date" id="filterDate" value="${today}" onchange="filterAppointments()">
                             <select id="filterStatus" onchange="filterAppointments()">
                                 <option value="">All Status</option>
-                                <option value="scheduled">Scheduled</option>
+                                <option value="scheduled" selected>Scheduled</option>
                                 <option value="completed">Completed</option>
                                 <option value="cancelled">Cancelled</option>
                             </select>
@@ -690,7 +695,11 @@
                                     <td>$${m.price_per_unit}</td>
                                     <td>${formatDate(m.expiry_date)}</td>
                                     <td>${m.is_expired ? '<span class="status-badge status-cancelled">EXPIRED</span>' : m.is_low_stock ? '<span class="status-badge status-pending">LOW STOCK</span>' : '-'}</td>
-                                    <td><button class="btn btn-sm btn-secondary" onclick="editMedicine(${m.id})">Edit</button></td>
+                                    <td>
+                                        <button class="btn btn-sm btn-success" onclick="showSellMedicineModal(${m.id}, '${m.name}', ${m.price_per_unit}, ${m.stock_quantity})">Sell</button>
+                                        <button class="btn btn-sm btn-secondary" onclick="editMedicine(${m.id})">Edit</button>
+                                        <button class="btn btn-sm btn-danger" onclick="deleteMedicine(${m.id}, '${m.name}')">Delete</button>
+                                    </td>
                                 </tr>
                             `).join('')}</tbody>
                         </table>
@@ -713,7 +722,11 @@
                             <td>$${m.price_per_unit}</td>
                             <td>${formatDate(m.expiry_date)}</td>
                             <td>${m.is_expired ? '<span class="status-badge status-cancelled">EXPIRED</span>' : '<span class="status-badge status-pending">LOW STOCK</span>'}</td>
-                            <td><button class="btn btn-sm btn-secondary">Edit</button></td>
+                            <td>
+                                <button class="btn btn-sm btn-success" onclick="showSellMedicineModal(${m.id}, '${m.name}', ${m.price_per_unit}, ${m.stock_quantity})">Sell</button>
+                                <button class="btn btn-sm btn-secondary" onclick="editMedicine(${m.id})">Edit</button>
+                                <button class="btn btn-sm btn-danger" onclick="deleteMedicine(${m.id}, '${m.name}')">Delete</button>
+                            </td>
                         </tr>
                     `).join('');
                 }
@@ -815,6 +828,75 @@
                     } catch (e) { showToast(e.message, 'error'); }
                 });
             } catch (e) { showToast(e.message, 'error'); }
+        };
+
+        window.deleteMedicine = async function(id, name) {
+            if (!confirm(`Delete medicine "${name}"? This action cannot be undone.`)) return;
+            try {
+                await apiRequest(`/medicines/${id}/`, { method: 'DELETE' });
+                showToast(`Medicine "${name}" deleted`);
+                renderPharmacy();
+            } catch (e) { showToast(e.message, 'error'); }
+        };
+
+        window.showSellMedicineModal = async function(medId, medName, medPrice, medStock) {
+            let patients = [];
+            try { patients = await apiRequest('/patients/'); } catch (e) {}
+            const modal = document.createElement('div');
+            modal.className = 'modal-overlay active';
+            modal.innerHTML = `
+                <div class="modal">
+                    <h2>Sell Medicine: ${medName}</h2>
+                    <p style="margin-bottom:16px;color:var(--text-light)">Price: $${medPrice} | Available Stock: ${medStock}</p>
+                    <form id="sellMedForm">
+                        <div class="form-group">
+                            <label>Quantity</label>
+                            <input type="number" id="sellQty" value="1" min="1" max="${medStock}" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Sell To</label>
+                            <select id="sellPatient" onchange="document.getElementById('walkinOption').style.display = this.value ? 'none' : 'block'">
+                                <option value="">-- Walking Customer (Cash Sale) --</option>
+                                ${patients.map(p => `<option value="${p.id}">${p.first_name} ${p.last_name} ${p.is_admitted ? '(Admitted)' : ''}</option>`).join('')}
+                            </select>
+                            <div id="walkinOption" style="margin-top:8px;padding:8px;background:#fef3c7;border-radius:8px;font-size:13px;color:#92400e">Walking Customer - Cash sale, no bill created</div>
+                        </div>
+                        <div style="margin-top:16px;padding:12px;background:#f1f5f9;border-radius:8px">
+                            <strong>Total: $<span id="sellTotal">${medPrice}</span></strong>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Complete Sale</button>
+                        <button type="button" class="btn btn-secondary" style="margin-left:8px" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
+                    </form>
+                </div>
+            `;
+            document.body.appendChild(modal);
+
+            document.getElementById('sellQty').addEventListener('input', function() {
+                const total = (parseInt(this.value) || 0) * medPrice;
+                document.getElementById('sellTotal').textContent = total.toFixed(2);
+            });
+
+            document.getElementById('sellMedForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const qty = parseInt(document.getElementById('sellQty').value);
+                const patientId = document.getElementById('sellPatient').value;
+                try {
+                    const result = await apiRequest(`/medicines/${medId}/sell/`, {
+                        method: 'POST',
+                        body: JSON.stringify({ quantity: qty, patient_id: patientId ? parseInt(patientId) : null })
+                    });
+                    showToast(result.message);
+                    modal.remove();
+                    renderPharmacy();
+                    // if this sale was added to a patient who is currently selected in billing, refresh their bill
+                    if (patientId) {
+                        const pid = parseInt(patientId);
+                        if (window._currentPatientId && window._currentPatientId === pid) {
+                            await loadBillForPatient(pid);
+                        }
+                    }
+                } catch (e) { showToast(e.message, 'error'); }
+            });
         };
 
         // =========== PRESCRIPTIONS ===========
@@ -976,34 +1058,263 @@
             const el = document.getElementById('pageContent');
             try {
                 const bills = await apiRequest('/bills/');
+                const patients = await apiRequest('/patients/');
                 el.innerHTML = `
-                    <div class="flex-between mb-16">
-                        <div></div>
-                        <button class="btn btn-primary" onclick="showAddBillModal()">+ Create Bill</button>
-                    </div>
-                    <div class="table-container">
-                        <table>
-                            <thead><tr><th>ID</th><th>Patient</th><th>Total</th><th>Paid</th><th>Due</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead>
-                            <tbody>${bills.map(b => `
-                                <tr>
-                                    <td>#${b.id}</td>
-                                    <td>${b.patient_name}</td>
-                                    <td>$${b.total_amount}</td>
-                                    <td>$${b.paid_amount}</td>
-                                    <td>$${b.due_amount}</td>
-                                    <td>${formatDate(b.bill_date)}</td>
-                                    <td><span class="status-badge status-${b.status}">${b.status}</span></td>
-                                    <td>
-                                        <button class="btn btn-sm btn-secondary" onclick="viewBill(${b.id})">View</button>
-                                        ${b.status !== 'paid' ? `<button class="btn btn-sm btn-success" onclick="showAddPaymentModal(${b.id})">Pay</button>` : ''}
-                                    </td>
-                                </tr>
-                            `).join('')}</tbody>
-                        </table>
+                    <div class="billing-layout">
+                        <div class="billing-sidebar">
+                            <div class="billing-sidebar-header">
+                                <h3>Select Patient</h3>
+                                <input type="text" id="billPatientSearch" placeholder="Search patients..." oninput="filterBillPatients()" style="width:100%;padding:8px 12px;border:2px solid var(--border);border-radius:8px;font-size:14px;margin-top:8px">
+                            </div>
+                            <div id="billPatientsList" class="bill-patients-list">
+                                ${patients.map(p => `
+                                    <div class="bill-patient-item" onclick='selectBillPatient(${p.id}, ${JSON.stringify(p.first_name + ' ' + p.last_name)}, this)'>
+                                        <div class="bill-patient-name">${p.first_name} ${p.last_name}</div>
+                                        <div class="bill-patient-info">${p.gender === 'M' ? 'Male' : p.gender === 'F' ? 'Female' : 'Other'} ${p.age ?? ''} ${p.is_admitted ? '• Admitted' : ''}</div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                        <div class="billing-main">
+                            <div id="billNoPatient" style="text-align:center;padding:60px 20px;color:var(--text-light)">
+                                <div style="font-size:64px;margin-bottom:16px">💰</div>
+                                <h3>Select a patient from the left</h3>
+                                <p>View current bill, add items, record payments, and print slips</p>
+                            </div>
+                            <div id="billPatientView" style="display:none">
+                                <div class="flex-between mb-16">
+                                    <h2 id="billPatientName" style="margin:0"></h2>
+                                    <div>
+                                        <button class="btn btn-sm btn-primary" id="btnAutoCalc" onclick="autoCalculateBill()">⚡ Auto Calculate</button>
+                                        <button class="btn btn-sm btn-success" onclick="showAddBillItemModal()">+ Add Item</button>
+                                        <button class="btn btn-sm btn-secondary" onclick="showAddPaymentFromBill()">💰 Pay</button>
+                                        <button class="btn btn-sm btn-warning" onclick="printBillSlip()">🖨️ Print Slip</button>
+                                    </div>
+                                </div>
+                                <div class="stats-grid" style="grid-template-columns:1fr 1fr 1fr;margin-bottom:16px">
+                                    <div class="stat-card"><div class="stat-value" id="billTotalDisplay">$0.00</div><div class="stat-label">Total</div></div>
+                                    <div class="stat-card green"><div class="stat-value" id="billPaidDisplay">$0.00</div><div class="stat-label">Paid</div></div>
+                                    <div class="stat-card red"><div class="stat-value" id="billDueDisplay">$0.00</div><div class="stat-label">Due</div></div>
+                                </div>
+                                <div class="table-container">
+                                    <table>
+                                        <thead><tr><th>Description</th><th>Qty</th><th>Price</th><th>Amount</th></tr></thead>
+                                        <tbody id="billItemsBody"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            <div class="table-container" style="margin-top:24px">
+                                <h3>All Bills</h3>
+                                <table>
+                                    <thead><tr><th>ID</th><th>Patient</th><th>Total</th><th>Paid</th><th>Due</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead>
+                                    <tbody>${bills.map(b => `
+                                        <tr>
+                                            <td>#${b.id}</td>
+                                            <td>${b.patient_name}</td>
+                                            <td>$${b.total_amount}</td>
+                                            <td>$${b.paid_amount}</td>
+                                            <td>$${b.due_amount}</td>
+                                            <td>${formatDate(b.bill_date)}</td>
+                                            <td><span class="status-badge status-${b.status}">${b.status}</span></td>
+                                            <td>
+                                                <button class="btn btn-sm btn-secondary" onclick="viewBill(${b.id})">View</button>
+                                                ${b.status !== 'paid' ? `<button class="btn btn-sm btn-success" onclick="showAddPaymentModal(${b.id})">Pay</button>` : ''}
+                                            </td>
+                                        </tr>
+                                    `).join('')}</tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                 `;
+                window._allBillPatients = patients;
             } catch (e) { el.innerHTML = `<p style="color:var(--danger)">${e.message}</p>`; }
         }
+
+        window._currentBillId = null;
+        window._currentPatientId = null;
+
+        window.filterBillPatients = function() {
+            const q = (document.getElementById('billPatientSearch').value || '').toLowerCase();
+            document.querySelectorAll('.bill-patient-item').forEach(item => {
+                const name = item.querySelector('.bill-patient-name').textContent.toLowerCase();
+                item.style.display = name.includes(q) ? '' : 'none';
+            });
+        };
+
+        window.selectBillPatient = async function(patientId, patientName, el) {
+            window._currentPatientId = patientId;
+            document.querySelectorAll('.bill-patient-item').forEach(item => item.classList.remove('active'));
+            if (el && el.classList) el.classList.add('active');
+            document.getElementById('billNoPatient').style.display = 'none';
+            document.getElementById('billPatientView').style.display = 'block';
+            document.getElementById('billPatientName').textContent = patientName;
+            await loadBillForPatient(patientId);
+        };
+
+        async function loadBillForPatient(patientId) {
+            try {
+                const bill = await apiRequest(`/patients/${patientId}/current_bill/`);
+                let activeBill = bill;
+                if (bill && bill.id) {
+                    activeBill = await apiRequest(`/bills/${bill.id}/auto_calculate/`, { method: 'POST' });
+                }
+
+                window._currentBillId = activeBill?.id || null;
+                document.getElementById('billTotalDisplay').textContent = `$${activeBill?.total_amount ?? 0}`;
+                document.getElementById('billPaidDisplay').textContent = `$${activeBill?.paid_amount ?? 0}`;
+                document.getElementById('billDueDisplay').textContent = `$${activeBill?.due_amount ?? 0}`;
+                const tbody = document.getElementById('billItemsBody');
+                if (!activeBill || !activeBill.id) {
+                    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-light)">No activity yet. Bill generates automatically when doctor/room/medicine is assigned.</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = (activeBill.items || []).map(i => `
+                    <tr>
+                        <td>${i.description}</td>
+                        <td>${i.quantity}</td>
+                        <td>$${i.unit_price}</td>
+                        <td>$${i.amount}</td>
+                    </tr>
+                `).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--text-light)">No items yet. Click Auto Calculate.</td></tr>';
+            } catch (e) {
+                window._currentBillId = null;
+                document.getElementById('billTotalDisplay').textContent = '$0.00';
+                document.getElementById('billPaidDisplay').textContent = '$0.00';
+                document.getElementById('billDueDisplay').textContent = '$0.00';
+                document.getElementById('billItemsBody').innerHTML =
+                    '<tr><td colspan="4" style="text-align:center;color:var(--text-light)">No active bill.</td></tr>';
+            }
+        }
+
+        window.autoCalculateBill = async function() {
+            if (!window._currentBillId) { showToast('No bill selected', 'error'); return; }
+            try {
+                const bill = await apiRequest(`/bills/${window._currentBillId}/auto_calculate/`, { method: 'POST' });
+                document.getElementById('billTotalDisplay').textContent = `$${bill.total_amount}`;
+                document.getElementById('billPaidDisplay').textContent = `$${bill.paid_amount}`;
+                document.getElementById('billDueDisplay').textContent = `$${bill.due_amount}`;
+                const tbody = document.getElementById('billItemsBody');
+                tbody.innerHTML = (bill.items || []).map(i => `
+                    <tr>
+                        <td>${i.description}</td>
+                        <td>${i.quantity}</td>
+                        <td>$${i.unit_price}</td>
+                        <td>$${i.amount}</td>
+                    </tr>
+                `).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--text-light)">No items</td></tr>';
+                showToast('Bill auto-calculated with doctor fees and room charges');
+            } catch (e) { showToast(e.message, 'error'); }
+        };
+
+        window.showAddBillItemModal = function() {
+            if (!window._currentBillId) { showToast('Select a patient first', 'error'); return; }
+            const modal = document.createElement('div');
+            modal.className = 'modal-overlay active';
+            modal.innerHTML = `
+                <div class="modal">
+                    <h2>Add Bill Item</h2>
+                    <form id="addBillItemForm">
+                        <div class="form-group"><label>Description</label><input type="text" id="biDesc" required></div>
+                        <div class="form-row">
+                            <div class="form-group"><label>Quantity</label><input type="number" id="biQty" value="1" min="1"></div>
+                            <div class="form-group"><label>Unit Price ($)</label><input type="number" id="biPrice" step="0.01" value="0"></div>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Add to Bill</button>
+                        <button type="button" class="btn btn-secondary" style="margin-left:8px" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
+                    </form>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            document.getElementById('addBillItemForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const desc = document.getElementById('biDesc').value;
+                const qty = parseInt(document.getElementById('biQty').value) || 1;
+                const price = parseFloat(document.getElementById('biPrice').value) || 0;
+                try {
+                    await apiRequest(`/bills/${window._currentBillId}/add_item/`, {
+                        method: 'POST',
+                        body: JSON.stringify({ description: desc, quantity: qty, unit_price: price, amount: qty * price })
+                    });
+                    showToast('Item added to bill');
+                    modal.remove();
+                    selectBillPatient(window._currentPatientId, document.getElementById('billPatientName').textContent);
+                } catch (e) { showToast(e.message, 'error'); }
+            });
+        };
+
+        window.showAddPaymentFromBill = function() {
+            if (!window._currentBillId) { showToast('Select a patient first', 'error'); return; }
+            showAddPaymentModal(window._currentBillId);
+        };
+
+        window.printBillSlip = function() {
+            if (!window._currentBillId) { showToast('Select a patient first', 'error'); return; }
+            const billId = window._currentBillId;
+            const pName = document.getElementById('billPatientName').textContent;
+            const total = document.getElementById('billTotalDisplay').textContent;
+            const paid = document.getElementById('billPaidDisplay').textContent;
+            const due = document.getElementById('billDueDisplay').textContent;
+            const rows = document.querySelectorAll('#billItemsBody tr');
+            let itemsHtml = '';
+            rows.forEach(row => {
+                const cols = row.querySelectorAll('td');
+                if (cols.length === 4) {
+                    itemsHtml += `<tr><td>${cols[0].textContent}</td><td>${cols[1].textContent}</td><td>${cols[2].textContent}</td><td>${cols[3].textContent}</td></tr>`;
+                }
+            });
+            if (!itemsHtml) itemsHtml = '<tr><td colspan="4" style="text-align:center">No items</td></tr>';
+
+            const printWin = window.open('', '_blank', 'width=800,height=600');
+            printWin.document.write(`
+                <html><head><title>Bill Slip #${billId}</title>
+                <style>
+                    body { font-family: 'Courier New', monospace; padding: 40px; color: #333; }
+                    .header { text-align: center; margin-bottom: 30px; border-bottom: 2px dashed #333; padding-bottom: 20px; }
+                    .header h1 { margin: 0; font-size: 24px; }
+                    .header p { margin: 4px 0; color: #666; font-size: 13px; }
+                    .info { margin-bottom: 20px; }
+                    .info p { margin: 4px 0; font-size: 14px; }
+                    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+                    th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid #ddd; font-size: 13px; }
+                    th { background: #f5f5f5; font-weight: 600; }
+                    .totals { text-align: right; margin-top: 20px; padding-top: 15px; border-top: 2px solid #333; }
+                    .totals p { margin: 4px 0; font-size: 15px; }
+                    .totals .due { font-size: 20px; font-weight: bold; color: #dc2626; }
+                    .footer { text-align: center; margin-top: 40px; font-size: 12px; color: #999; border-top: 1px dashed #ccc; padding-top: 15px; }
+                    @media print { body { padding: 20px; } }
+                </style>
+                </head><body>
+                <div class="header">
+                    <h1>🏥 HMS Hospital</h1>
+                    <p>123 Healthcare Avenue, Medical District</p>
+                    <p>Phone: (555) 123-4567 | Email: info@hmshospital.com</p>
+                    <h2 style="margin-top:10px">BILL SLIP</h2>
+                    <p>Bill #${billId} | Date: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</p>
+                </div>
+                <div class="info">
+                    <p><strong>Patient:</strong> ${pName}</p>
+                </div>
+                <table>
+                    <thead><tr><th>Description</th><th>Qty</th><th>Price</th><th>Amount</th></tr></thead>
+                    <tbody>${itemsHtml}</tbody>
+                </table>
+                <div class="totals">
+                    <p><strong>Total:</strong> ${total}</p>
+                    <p><strong>Paid:</strong> ${paid}</p>
+                    <p class="due">Due: ${due}</p>
+                </div>
+                <div class="footer">
+                    <p>Thank you for choosing HMS Hospital</p>
+                    <p>This is a computer-generated slip</p>
+                </div>
+                <script>
+                    window.onload = function() { window.print(); }
+                <\\/script>
+                </body></html>
+            `);
+            printWin.document.close();
+        };
 
         window.viewBill = async function(id) {
             try {
@@ -1020,101 +1331,190 @@
                         <h3>Items</h3>
                         <table><thead><tr><th>Description</th><th>Qty</th><th>Price</th><th>Amount</th></tr></thead>
                         <tbody>${(b.items || []).map(i => `<tr><td>${i.description}</td><td>${i.quantity}</td><td>$${i.unit_price}</td><td>$${i.amount}</td></tr>`).join('') || '<tr><td colspan="4">No items</td></tr>'}</tbody></table>
-                        <button class="btn btn-secondary mt-16" onclick="this.closest('.modal-overlay').remove()">Close</button>
+                        <div style="margin-top:16px;display:flex;gap:8px">
+                            <button class="btn btn-sm btn-warning" onclick="printSingleBillSlip(${b.id})">🖨️ Print</button>
+                            <button class="btn btn-sm btn-secondary" onclick="this.closest('.modal-overlay').remove()">Close</button>
+                        </div>
                     </div>
                 `;
                 document.body.appendChild(modal);
             } catch (e) { showToast(e.message, 'error'); }
         };
 
+        window.printSingleBillSlip = async function(billId) {
+            try {
+                const b = await apiRequest(`/bills/${billId}/`);
+                const pName = b.patient_name;
+                const total = `$${b.total_amount}`;
+                const paid = `$${b.paid_amount}`;
+                const due = `$${b.due_amount}`;
+                const items = b.items || [];
+                let itemsHtml = items.map(i => `<tr><td>${i.description}</td><td>${i.quantity}</td><td>$${i.unit_price}</td><td>$${i.amount}</td></tr>`).join('');
+                if (!itemsHtml) itemsHtml = '<tr><td colspan="4" style="text-align:center">No items</td></tr>';
+
+                const printWin = window.open('', '_blank', 'width=800,height=600');
+                printWin.document.write(`
+                    <html><head><title>Bill Slip #\${billId}</title>
+                    <style>
+                        body { font-family: 'Courier New', monospace; padding: 40px; color: #333; }
+                        .header { text-align: center; margin-bottom: 30px; border-bottom: 2px dashed #333; padding-bottom: 20px; }
+                        .header h1 { margin: 0; font-size: 24px; }
+                        .header p { margin: 4px 0; color: #666; font-size: 13px; }
+                        .info { margin-bottom: 20px; }
+                        .info p { margin: 4px 0; font-size: 14px; }
+                        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+                        th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid #ddd; font-size: 13px; }
+                        th { background: #f5f5f5; font-weight: 600; }
+                        .totals { text-align: right; margin-top: 20px; padding-top: 15px; border-top: 2px solid #333; }
+                        .totals p { margin: 4px 0; font-size: 15px; }
+                        .totals .due { font-size: 20px; font-weight: bold; color: #dc2626; }
+                        .footer { text-align: center; margin-top: 40px; font-size: 12px; color: #999; border-top: 1px dashed #ccc; padding-top: 15px; }
+                        @media print { body { padding: 20px; } }
+                    </style>
+                    </head><body>
+                    <div class="header">
+                        <h1>🏥 HMS Hospital</h1>
+                        <p>123 Healthcare Avenue, Medical District</p>
+                        <p>Phone: (555) 123-4567 | Email: info@hmshospital.com</p>
+                        <h2 style="margin-top:10px">BILL SLIP</h2>
+                        <p>Bill #\${billId} | Date: \${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</p>
+                    </div>
+                    <div class="info">
+                        <p><strong>Patient:</strong> \${pName}</p>
+                    </div>
+                    <table>
+                        <thead><tr><th>Description</th><th>Qty</th><th>Price</th><th>Amount</th></tr></thead>
+                        <tbody>\${itemsHtml}</tbody>
+                    </table>
+                    <div class="totals">
+                        <p><strong>Total:</strong> \${total}</p>
+                        <p><strong>Paid:</strong> \${paid}</p>
+                        <p class="due">Due: \${due}</p>
+                    </div>
+                    <div class="footer">
+                        <p>Thank you for choosing HMS Hospital</p>
+                        <p>This is a computer-generated slip</p>
+                    </div>
+                    <script>
+                        window.onload = function() { window.print(); }
+                    <\\/script>
+                    </body></html>
+                `);
+                printWin.document.close();
+            } catch (e) { showToast(e.message, 'error'); }
+        };
+
         window.showAddPaymentModal = async function(billId) {
-            const b = await apiRequest(`/bills/${billId}/`);
-            const modal = document.createElement('div');
-            modal.className = 'modal-overlay active';
-            modal.innerHTML = `
-                <div class="modal">
-                    <h2>Add Payment</h2>
-                    <p>Bill #${b.id} - Due: $${b.due_amount}</p>
-                    <form id="paymentForm">
-                        <div class="form-group"><label>Amount ($)</label><input type="number" id="payAmount" step="0.01" max="${b.due_amount}" required></div>
-                        <button type="submit" class="btn btn-success">Record Payment</button>
-                        <button type="button" class="btn btn-secondary" style="margin-left:8px" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
-                    </form>
-                </div>
-            `;
-            document.body.appendChild(modal);
-            document.getElementById('paymentForm').addEventListener('submit', async (e) => {
-                e.preventDefault();
-                try {
-                    await apiRequest(`/bills/${billId}/add_payment/`, { method: 'POST', body: JSON.stringify({ amount: parseFloat(document.getElementById('payAmount').value) }) });
-                    showToast('Payment recorded');
-                    modal.remove();
-                    renderBilling();
-                } catch (e) { showToast(e.message, 'error'); }
-            });
-        };
+    try {
+        const b = await apiRequest(`/bills/${billId}/`);
+        const modal = document.createElement('div');
+        modal.className = 'modal-overlay active';
+        modal.innerHTML = `
+            <div class="modal">
+                <h2>Add Payment</h2>
+                <p>Bill #${b.id} - Due: <strong>$${b.due_amount}</strong></p>
+                <form id="paymentForm">
+                    <div class="form-group">
+                        <label>Amount ($)</label>
+                        <input type="number" id="payAmount" step="0.01" max="${b.due_amount}" value="${b.due_amount}" required>
+                    </div>
+                    <button type="submit" class="btn btn-success">Record Payment</button>
+                    <button type="button" class="btn btn-secondary" style="margin-left:8px" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
+                </form>
+            </div>
+        `;
+        document.body.appendChild(modal);
 
-        window.showAddBillModal = function() {
-            const patients = window._patients || [];
-            const modal = document.createElement('div');
-            modal.className = 'modal-overlay active';
-            modal.innerHTML = `
-                <div class="modal" style="width:600px">
-                    <h2>Create Bill</h2>
-                    <form id="addBillForm">
-                        <div class="form-group"><label>Patient</label><select id="bPatient" required><option value="">--</option>${patients.map(p => `<option value="${p.id}">${p.first_name} ${p.last_name}</option>`).join('')}</select></div>
-                        <div id="billItems">
-                            <div class="bill-item form-row">
-                                <div class="form-group"><label>Description</label><input type="text" class="bill-desc" required></div>
-                                <div class="form-group"><label>Qty</label><input type="number" class="bill-qty" value="1"></div>
-                                <div class="form-group"><label>Unit Price ($)</label><input type="number" class="bill-price" step="0.01" value="0"></div>
-                            </div>
-                        </div>
-                        <button type="button" class="btn btn-sm btn-secondary mb-16" onclick="addBillItem()">+ Add Item</button><br>
-                        <button type="submit" class="btn btn-primary">Create Bill</button>
-                        <button type="button" class="btn btn-secondary" style="margin-left:8px" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
-                    </form>
-                </div>
-            `;
-            document.body.appendChild(modal);
-            document.getElementById('addBillForm').addEventListener('submit', async (e) => {
-                e.preventDefault();
-                const items = document.querySelectorAll('.bill-item');
-                const billItems = [];
-                items.forEach(item => {
-                    const desc = item.querySelector('.bill-desc').value;
-                    if (desc) {
-                        billItems.push({
-                            description: desc,
-                            quantity: parseInt(item.querySelector('.bill-qty').value) || 1,
-                            unit_price: parseFloat(item.querySelector('.bill-price').value) || 0,
-                        });
-                    }
+        document.getElementById('paymentForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const amount = parseFloat(document.getElementById('payAmount').value);
+            try {
+                await apiRequest(`/bills/${billId}/add_payment/`, {
+                    method: 'POST',
+                    body: JSON.stringify({ amount })
                 });
-                try {
-                    const bill = await apiRequest('/bills/', { method: 'POST', body: JSON.stringify({ patient: parseInt(document.getElementById('bPatient').value) }) });
-                    for (const item of billItems) {
-                        item.amount = item.quantity * item.unit_price;
-                        await apiRequest(`/bills/${bill.id}/add_item/`, { method: 'POST', body: JSON.stringify(item) });
-                    }
-                    showToast('Bill created');
-                    modal.remove();
-                    renderBilling();
-                } catch (e) { showToast(e.message, 'error'); }
-            });
-        };
+                modal.remove();
+                showPaymentSuccessDialog(amount, billId);
+            } catch (err) {
+                showToast(err.message, 'error');
+            }
+        });
+    } catch (e) {
+        showToast(e.message, 'error');
+    }
+};
 
-        window.addBillItem = function() {
-            const container = document.getElementById('billItems');
-            const item = document.createElement('div');
-            item.className = 'bill-item form-row';
-            item.innerHTML = `
-                <div class="form-group"><label>Description</label><input type="text" class="bill-desc"></div>
-                <div class="form-group"><label>Qty</label><input type="number" class="bill-qty" value="1"></div>
-                <div class="form-group"><label>Unit Price ($)</label><input type="number" class="bill-price" step="0.01" value="0"></div>
-            `;
-            container.appendChild(item);
-        };
+function showPaymentSuccessDialog(amount, billId) {
+    if (!document.getElementById('successAnimStyle')) {
+        const style = document.createElement('style');
+        style.id = 'successAnimStyle';
+        style.textContent = `
+            @keyframes scaleIn {
+                0% { transform: scale(0); opacity: 0; }
+                60% { transform: scale(1.2); }
+                100% { transform: scale(1); opacity: 1; }
+            }
+            @keyframes drawCheck {
+                0% { stroke-dashoffset: 100; }
+                100% { stroke-dashoffset: 0; }
+            }
+            @keyframes fadeSlideUp {
+                0% { opacity: 0; transform: translateY(16px); }
+                100% { opacity: 1; transform: translateY(0); }
+            }
+            .success-circle { animation: scaleIn 0.5s cubic-bezier(0.22, 0.96, 0.56, 1) forwards; }
+            .success-check { stroke-dasharray: 100; stroke-dashoffset: 100; animation: drawCheck 0.4s ease forwards 0.4s; }
+            .success-text { animation: fadeSlideUp 0.4s ease forwards 0.6s; opacity: 0; }
+        `;
+        document.head.appendChild(style);
+    }
+
+    const successModal = document.createElement('div');
+    successModal.className = 'modal-overlay active';
+    successModal.innerHTML = `
+        <div class="modal" style="text-align:center;padding:40px 32px;max-width:360px">
+            <svg width="90" height="90" viewBox="0 0 90 90" style="margin-bottom:20px">
+                <circle class="success-circle" cx="45" cy="45" r="40"
+                    fill="#dcfce7" stroke="#22c55e" stroke-width="3"/>
+                <polyline class="success-check" points="25,46 38,60 65,32"
+                    fill="none" stroke="#22c55e" stroke-width="5"
+                    stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <div class="success-text">
+                <h2 style="margin:0 0 8px;color:#16a34a">Payment Recorded!</h2>
+                <p style="color:#64748b;margin:0 0 4px">Amount paid: <strong>$${amount.toFixed(2)}</strong></p>
+                <p style="color:#64748b;margin:0 0 24px;font-size:13px">Bill #${billId} updated</p>
+                <button class="btn btn-success" onclick="closeSuccessAndRefresh(this, ${billId})">Done</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(successModal);
+
+    setTimeout(() => {
+        if (successModal.parentNode) {
+            successModal.remove();
+            refreshAfterPayment(billId);
+        }
+    }, 3000);
+}
+
+window.closeSuccessAndRefresh = function(btn, billId) {
+    btn.closest('.modal-overlay').remove();
+    refreshAfterPayment(billId);
+};
+
+async function refreshAfterPayment(billId) {
+    try {
+        const updatedBill = await apiRequest(`/bills/${billId}/`);
+        const patientId = updatedBill.patient;
+        if (window._currentPatientId && window._currentPatientId === patientId) {
+            await loadBillForPatient(window._currentPatientId);
+        }
+        await window.refreshAllBillsTable();
+    } catch (e) {
+        renderBilling();
+    }
+}
 
         // =========== ROOMS ===========
         async function renderRooms() {

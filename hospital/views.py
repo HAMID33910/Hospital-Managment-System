@@ -17,6 +17,7 @@ from .serializers import (UserSerializer, RegisterSerializer, DoctorSerializer,
                           PrescriptionSerializer, PrescriptionItemSerializer,
                           BillingSerializer, BillingItemSerializer,
                           DashboardStatsSerializer, ProfileSerializer)
+from decimal import Decimal
 
 
 class CustomTokenObtainPairView(TokenObtainPairView):
@@ -158,7 +159,55 @@ class PatientViewSet(viewsets.ModelViewSet):
         patient.is_admitted = True
         patient.save()
         serializer = RoomAllocationSerializer(allocation)
+        # Create or update billing for room charges immediately
+        try:
+            bill = Billing.objects.filter(patient=patient, status__in=['pending', 'partial']).last()
+            if not bill:
+                bill = Billing.objects.create(patient=patient)
+                bill.save()
+            # add room charge if not already present
+            has_room_charge = bill.items.filter(description__icontains='Room Charges').exists()
+            if not has_room_charge and allocation.room.price_per_day > 0:
+                BillingItem.objects.create(
+                    billing=bill,
+                    description=f"Room Charges - {allocation.room.room_number} ({allocation.room.get_room_type_display()})",
+                    quantity=1,
+                    unit_price=allocation.room.price_per_day,
+                    amount=allocation.room.price_per_day
+                )
+                bill.total_amount = sum(i.amount for i in bill.items.all())
+                bill.save()
+        except Exception:
+            # don't block admit flow on billing errors
+            pass
         return Response(serializer.data, status=201)
+
+    @action(detail=True, methods=['get'])
+    def current_bill(self, request, pk=None):
+        patient = self.get_object()
+        bill = Billing.objects.filter(patient=patient, status__in=['pending', 'partial']).last()
+        if not bill:
+            bill = Billing.objects.filter(patient=patient).last()
+            if not bill:
+                # only create if patient has actual activity
+                has_appointments = Appointment.objects.filter(patient=patient, status='completed').exists()
+                has_room = RoomAllocation.objects.filter(patient=patient, is_active=True).exists()
+                has_medicines = BillingItem.objects.filter(billing__patient=patient).exists()
+                if has_appointments or has_room or has_medicines:
+                    bill = Billing.objects.create(patient=patient)
+                else:
+                    return Response({
+                        'id': None,
+                        'total_amount': '0.00',
+                        'paid_amount': '0.00',
+                        'due_amount': '0.00',
+                        'items': [],
+                        'status': 'pending',
+                        'patient_name': str(patient)
+                    })
+        serializer = BillingSerializer(bill)
+        return Response(serializer.data)
+    
 
     @action(detail=True, methods=['post'])
     def discharge(self, request, pk=None):
@@ -201,6 +250,26 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         appointment = self.get_object()
         appointment.status = 'completed'
         appointment.save()
+        # Auto-add consultation fee to billing for this patient
+        try:
+            patient = appointment.patient
+            bill = Billing.objects.filter(patient=patient, status__in=['pending', 'partial']).last()
+            if not bill:
+                bill = Billing.objects.create(patient=patient)
+                bill.save()
+            has_doctor_fee = bill.items.filter(description__icontains='Consultation Fee').exists()
+            if not has_doctor_fee and appointment.doctor.consultation_fee > 0:
+                BillingItem.objects.create(
+                    billing=bill,
+                    description=f"Consultation Fee - Dr. {appointment.doctor.user.get_full_name()}",
+                    quantity=1,
+                    unit_price=appointment.doctor.consultation_fee,
+                    amount=appointment.doctor.consultation_fee
+                )
+                bill.total_amount = sum(i.amount for i in bill.items.all())
+                bill.save()
+        except Exception:
+            pass
         return Response({'message': 'Appointment completed'})
 
     @action(detail=True, methods=['post'])
@@ -264,6 +333,47 @@ class MedicineViewSet(viewsets.ModelViewSet):
         serializer = MedicineListSerializer(meds, many=True)
         return Response(serializer.data)
 
+    @action(detail=True, methods=['post'])
+    def sell(self, request, pk=None):
+        medicine = self.get_object()
+        quantity = int(request.data.get('quantity', 1))
+        patient_id = request.data.get('patient_id')
+
+        if medicine.stock_quantity < quantity:
+            return Response({'error': f'Insufficient stock. Available: {medicine.stock_quantity}'}, status=400)
+
+        medicine.stock_quantity -= quantity
+        medicine.save()
+
+        if patient_id:
+            try:
+                patient = Patient.objects.get(id=patient_id)
+            except Patient.DoesNotExist:
+                return Response({'error': 'Patient not found'}, status=404)
+            bill = Billing.objects.filter(patient=patient, status__in=['pending', 'partial']).last()
+            if not bill:
+                bill = Billing.objects.create(patient=patient)
+                bill.save()
+            item = BillingItem.objects.create(
+                billing=bill,
+                description=f"{medicine.name} x{quantity} ({medicine.brand or 'N/A'})",
+                quantity=quantity,
+                unit_price=medicine.price_per_unit,
+                amount=quantity * medicine.price_per_unit
+            )
+            bill.total_amount = sum(i.amount for i in bill.items.all())
+            bill.save()
+            return Response({
+                'message': f'{medicine.name} x{quantity} sold to {patient}',
+                'bill_id': bill.id,
+                'total_amount': float(bill.total_amount)
+            })
+        else:
+            return Response({
+                'message': f'{medicine.name} x{quantity} sold (Walk-in Customer)',
+                'total': float(quantity * medicine.price_per_unit)
+            })
+
 
 class PrescriptionViewSet(viewsets.ModelViewSet):
     queryset = Prescription.objects.all().select_related('patient', 'doctor__user')
@@ -310,9 +420,14 @@ class BillingViewSet(viewsets.ModelViewSet):
         billing = self.get_object()
         amount = request.data.get('amount', 0)
         try:
-            amount = float(amount)
-        except (ValueError, TypeError):
+            from decimal import Decimal
+            amount = Decimal(str(amount))
+        except Exception:
             return Response({'error': 'Invalid amount'}, status=400)
+        if amount <= 0:
+            return Response({'error': 'Amount must be greater than 0'}, status=400)
+        if amount > billing.due_amount:
+            return Response({'error': f'Amount exceeds due amount of {billing.due_amount}'}, status=400)
         billing.paid_amount += amount
         if billing.paid_amount >= billing.total_amount:
             billing.status = 'paid'
@@ -323,15 +438,48 @@ class BillingViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
     @action(detail=True, methods=['post'])
-    def add_item(self, request, pk=None):
+    def auto_calculate(self, request, pk=None):
         billing = self.get_object()
-        serializer = BillingItemSerializer(data=request.data)
-        if serializer.is_valid():
-            item = serializer.save(billing=billing)
-            billing.total_amount = sum(i.amount for i in billing.items.all())
-            billing.save()
-            return Response(serializer.data, status=201)
-        return Response(serializer.errors, status=400)
+        patient = billing.patient
+
+        completed_appts = Appointment.objects.filter(
+            patient=patient, status='completed'
+        ).select_related('doctor__user')
+
+        for appt in completed_appts:
+            already_added = billing.items.filter(
+                description__icontains=f'Dr. {appt.doctor.user.get_full_name()}'
+            ).exists()
+            if not already_added and appt.doctor.consultation_fee > 0:
+                BillingItem.objects.create(
+                    billing=billing,
+                    description=f"Consultation Fee - Dr. {appt.doctor.user.get_full_name()}",
+                    quantity=1,
+                    unit_price=appt.doctor.consultation_fee,
+                    amount=appt.doctor.consultation_fee
+                )
+
+        active_allocation = RoomAllocation.objects.filter(
+            patient=patient, is_active=True
+        ).first()
+
+        if active_allocation and active_allocation.room.price_per_day > 0:
+            already_added = billing.items.filter(
+                description__icontains=active_allocation.room.room_number
+            ).exists()
+            if not already_added:
+                BillingItem.objects.create(
+                    billing=billing,
+                    description=f"Room Charges - {active_allocation.room.room_number} ({active_allocation.room.get_room_type_display()})",
+                    quantity=1,
+                    unit_price=active_allocation.room.price_per_day,
+                    amount=active_allocation.room.price_per_day
+                )
+
+        billing.total_amount = sum(i.amount for i in billing.items.all())
+        billing.save()
+        serializer = self.get_serializer(billing)
+        return Response(serializer.data)
 
 
 @api_view(['GET'])
