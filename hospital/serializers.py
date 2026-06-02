@@ -57,9 +57,14 @@ class DoctorListSerializer(serializers.ModelSerializer):
 
 
 class PatientSerializer(serializers.ModelSerializer):
+    age = serializers.SerializerMethodField(read_only=True)
+
     class Meta:
         model = Patient
         fields = '__all__'
+
+    def get_age(self, obj):
+        return obj.age if hasattr(obj, 'age') else None
 
 
 class PatientListSerializer(serializers.ModelSerializer):

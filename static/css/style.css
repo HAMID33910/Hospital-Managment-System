@@ -480,3 +480,114 @@ table tr:hover {
         grid-template-columns: 1fr;
     }
 }
+
+
+
+/* Modernized style.css */
+/* Keep your existing CSS above this section if replacing manually.
+   This version is intended as a drop-in updated stylesheet based on the CSS shared in chat. */
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+:root{
+    --primary:#a855f7;
+    --primary-dark:#7e22ce;
+    --secondary:#f97316;
+    --success:#22c55e;
+    --warning:#f59e0b;
+    --danger:#ef4444;
+    --bg:#f8fafc;
+    --card:rgba(255,255,255,.82);
+    --text:#111827;
+    --text-light:#6b7280;
+    --border:rgba(255,255,255,.25);
+    --sidebar:#111827;
+    --sidebar-hover:#1f2937;
+}
+
+body{
+    font-family:'Inter','Segoe UI',sans-serif;
+    min-height:100vh;
+    color:var(--text);
+    background:linear-gradient(135deg,#fff7ed,#faf5ff,#fdf2f8);
+    background-size:400% 400%;
+    animation:gradientMove 15s ease infinite;
+}
+
+.login-page{
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    min-height:100vh;
+    background:linear-gradient(135deg,#581c87,#be185d,#ea580c);
+    background-size:300% 300%;
+    animation:gradientMove 10s ease infinite;
+}
+
+.login-card{
+    width:420px;
+    padding:40px;
+    border-radius:28px;
+    background:rgba(255,255,255,.15);
+    backdrop-filter:blur(25px);
+    border:1px solid rgba(255,255,255,.2);
+    box-shadow:0 20px 60px rgba(0,0,0,.3);
+    animation:floatCard 4s ease-in-out infinite;
+}
+
+.btn-primary{
+    background: linear-gradient(90deg, #1e3a5f 0%, #2c5282 50%, #3182ce 100%);
+    padding:12px;
+    font-size:16px;
+    margin-bottom:12px;
+}
+
+.stat-card,
+.table-container,
+.billing-sidebar,
+.modal{
+    background:rgba(255,255,255,.75);
+    backdrop-filter:blur(20px);
+    border:1px solid rgba(255,255,255,.4);
+    box-shadow:0 10px 40px rgba(0,0,0,.08);
+}
+
+.sidebar{
+    background:linear-gradient(180deg,#111827,#1f2937);
+}
+
+.sidebar-nav li a:hover,
+.sidebar-nav li a.active{
+   background: linear-gradient(90deg, #1e3a5f 0%, #2c5282 50%, #3182ce 100%);
+    color:white;
+}
+
+.main-content{
+    animation:fadeUp .6s ease;
+}
+
+@keyframes gradientMove{
+    0%{background-position:0% 50%}
+    50%{background-position:100% 50%}
+    100%{background-position:0% 50%}
+}
+
+@keyframes floatCard{
+    0%,100%{transform:translateY(0)}
+    50%{transform:translateY(-8px)}
+}
+
+@keyframes fadeUp{
+    from{opacity:0;transform:translateY(25px)}
+    to{opacity:1;transform:translateY(0)}
+}
+
+::-webkit-scrollbar{width:10px}
+::-webkit-scrollbar-thumb{
+    background: linear-gradient(90deg, #1e3a5f 0%, #2c5282 50%, #3182ce 100%);
+    border-radius:50px;
+}

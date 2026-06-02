@@ -44,13 +44,14 @@ class Patient(models.Model):
         ('B+', 'B+'), ('B-', 'B-'),
         ('AB+', 'AB+'), ('AB-', 'AB-'),
         ('O+', 'O+'), ('O-', 'O-'),
+        ("I don't know", "I don't know"),
     ]
     GENDER_CHOICES = [('M', 'Male'), ('F', 'Female'), ('O', 'Other')]
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)
     date_of_birth = models.DateField(null=True, blank=True)
     gender = models.CharField(max_length=1, choices=GENDER_CHOICES)
-    blood_group = models.CharField(max_length=3, choices=BLOOD_GROUPS, blank=True)
+    blood_group = models.CharField(max_length=12, choices=BLOOD_GROUPS, blank=True)
     phone = models.CharField(max_length=15)
     email = models.EmailField(blank=True)
     address = models.TextField(blank=True)
