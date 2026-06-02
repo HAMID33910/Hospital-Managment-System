@@ -92,6 +92,9 @@
             document.querySelector(`.sidebar-nav a[data-page="${page}"]`).classList.add('active');
             document.getElementById('pageTitle').textContent = pageTitles[page] || page;
             document.getElementById('headerActions').innerHTML = '';
+            if (page === 'overview') {
+                document.getElementById('headerActions').innerHTML = '';
+            }
 
             switch(page) {
                 case 'overview': renderOverview(); break;
@@ -1124,7 +1127,7 @@
                         <div class="billing-sidebar">
                             <div class="billing-sidebar-header">
                                 <h3>Select Patient</h3>
-                                <input type="text" id="billPatientSearch" placeholder="Search patients..." oninput="filterBillPatients()" style="width:100%;padding:8px 12px;border:2px solid var(--border);border-radius:8px;font-size:14px;margin-top:8px">
+                                <input type="text" id="billPatientSearch" placeholder="Search patients..." oninput="filterBillPatients()" style="width:100%;padding:8px 12px;border:2px solid var(--border);border-radius:8px;font-size:14px;margin-top:8px;border-color: black;">
                             </div>
                             <div id="billPatientsList" class="bill-patients-list">
                                 ${patients.map(p => `
