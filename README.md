@@ -72,5 +72,5 @@ Development notes
 Contributing
 - Fork the repo, create a feature branch, and open a pull request.
 
-License
-- Add a license as appropriate (MIT recommended).
+POWERED BY :
+HAMID MEHMOOD
