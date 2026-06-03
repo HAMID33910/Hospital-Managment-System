@@ -9,9 +9,14 @@ Features
 
 Requirements
 - Python 3.10+
-- Django (project used Django in this repo)
-- djangorestframework
-- djangorestframework-simplejwt
+
+Libraries & Dependencies (4 pip installs)
+The project requires the following Python packages:
+1. **Django (6.0.4)** — Web framework
+2. **djangorestframework** — REST API toolkit
+3. **djangorestframework-simplejwt** — JWT token authentication
+4. **django-cors-headers** — CORS support for API requests
+5. **requests** — HTTP library for testing (optional, used in test_doctor_api.py)
 
 Quick start (Windows)
 1. Create and activate a virtual environment
@@ -24,10 +29,18 @@ venv\Scripts\Activate.ps1   # PowerShell
 
 2. Install dependencies
 
+Install all required packages one by one:
 ```powershell
-pip install -r requirements.txt
-# If there's no requirements.txt, install minimal deps:
-pip install django djangorestframework djangorestframework-simplejwt
+pip install django
+pip install djangorestframework
+pip install djangorestframework-simplejwt
+pip install django-cors-headers
+pip install requests
+```
+
+Or install all at once:
+```powershell
+pip install django djangorestframework djangorestframework-simplejwt django-cors-headers requests
 ```
 
 3. Apply migrations and create a superuser
