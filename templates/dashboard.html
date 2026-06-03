@@ -539,7 +539,6 @@
 
         window.showAddDoctorModal = async function() {
             try {
-                const users = await apiRequest('/users/by_role/?role=doctor');
                 const modal = document.createElement('div');
                 modal.className = 'modal-overlay active';
                 modal.innerHTML = `
@@ -547,11 +546,8 @@
                         <h2>Add Doctor Profile</h2>
                         <form id="addDoctorForm">
                             <div class="form-group">
-                                <label>Doctor User</label>
-                                <select id="dUser" required>
-                                    <option value="">-- Select --</option>
-                                    ${users.map(u => `<option value="${u.id}">${u.first_name} ${u.last_name} (${u.username})</option>`).join('')}
-                                </select>
+                                <label>Doctor Name</label>
+                                <input type="text" id="dName" required placeholder="Enter doctor full name">
                             </div>
                             <div class="form-row">
                                 <div class="form-group"><label>Specialization</label><select id="dSpecialization" required><option value="">-- Select --</option>${SPECIALIZATIONS.map(s => `<option value="${s}">${s}</option>`).join('')}</select></div>
@@ -574,22 +570,44 @@
                 document.body.appendChild(modal);
                 document.getElementById('addDoctorForm').addEventListener('submit', async (e) => {
                     e.preventDefault();
-                    const data = {
-                        user_id: parseInt(document.getElementById('dUser').value),
-                        specialization: document.getElementById('dSpecialization').value,
-                        qualification: document.getElementById('dQualification').value,
-                        experience_years: parseInt(document.getElementById('dExperience').value) || 0,
-                        consultation_fee: parseFloat(document.getElementById('dFee').value) || 0,
-                        available_days: document.getElementById('dDays').value,
-                        available_time_start: document.getElementById('dStart').value || null,
-                        available_time_end: document.getElementById('dEnd').value || null,
-                    };
+                    const fullName = document.getElementById('dName').value.trim();
+                    const [first_name, last_name] = fullName.split(' ', 2).length > 1
+                        ? fullName.split(' ', 2)
+                        : [fullName, ''];
+                    const usernameBase = fullName.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || `doctor_${Date.now()}`;
+                    const username = `${usernameBase}_${Math.floor(Math.random() * 10000)}`;
+                    const password = `Dr@${Math.random().toString(36).slice(-8)}`;
+
                     try {
+                        const userResponse = await apiRequest('/register/', {
+                            method: 'POST',
+                            body: JSON.stringify({
+                                username,
+                                password,
+                                first_name,
+                                last_name,
+                                role: 'doctor',
+                            }),
+                        });
+
+                        const data = {
+                            user_id: userResponse.user.id,
+                            specialization: document.getElementById('dSpecialization').value,
+                            qualification: document.getElementById('dQualification').value,
+                            experience_years: parseInt(document.getElementById('dExperience').value) || 0,
+                            consultation_fee: parseFloat(document.getElementById('dFee').value) || 0,
+                            available_days: document.getElementById('dDays').value,
+                            available_time_start: document.getElementById('dStart').value || null,
+                            available_time_end: document.getElementById('dEnd').value || null,
+                        };
+
                         await apiRequest('/doctors/', { method: 'POST', body: JSON.stringify(data) });
-                        showToast('Doctor added successfully');
+                        showToast(`Doctor added successfully (${username})`);
                         modal.remove();
                         renderDoctors();
-                    } catch (e) { showToast(e.message, 'error'); }
+                    } catch (e) {
+                        showToast(e.message, 'error');
+                    }
                 });
             } catch (e) { showToast(e.message, 'error'); }
         };
